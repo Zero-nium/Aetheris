@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-gray-800 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .message-bubble {
+    @apply px-5 py-3 rounded-2xl max-w-[80%] break-words;
+  }
+  
+  .message-user {
+    @apply message-bubble bg-gray-200 text-gray-800 rounded-br-md;
+  }
+  
+  .message-pal {
+    @apply message-bubble bg-pink-100 text-gray-800 rounded-bl-md;
+  }
+  
+  .btn-primary {
+    @apply bg-pink-500 hover:bg-pink-600 text-white font-semibold 
+           px-6 py-3 rounded-full transition-all duration-200 
+           shadow-md hover:shadow-lg active:scale-95;
+  }
+  
+  .btn-tab {
+    @apply px-6 py-2 rounded-full font-medium transition-all duration-200;
+  }
+  
+  .btn-tab-active {
+    @apply bg-primary text-white shadow-md;
+  }
+  
+  .btn-tab-inactive {
+    @apply text-gray-600 hover:bg-white/50;
+  }
+  
+  .online-indicator {
+    @apply w-2 h-2 bg-green-400 rounded-full animate-pulse;
+  }
+  
+  .typing-dot {
+    @apply w-2 h-2 bg-gray-400 rounded-full animate-bounce;
+  }
+  
+  .event-card {
+    @apply bg-white rounded-xl p-5 shadow-sm border border-gray-100;
+  }
+  
+  .world-event-card {
+    @apply bg-world-event rounded-xl p-5 shadow-sm border border-pink-100;
+  }
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 124, 153, 0.3) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(91, 124, 153, 0.3);
+  border-radius: 20px;
+}

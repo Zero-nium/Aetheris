@@ -1,0 +1,16 @@
+{
+  "name": "aetheris-sim",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Aetheris — simulation engine for agent-inhabited virtual worlds",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}
