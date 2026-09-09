@@ -26,47 +26,48 @@ export function addAgent(agent) {
 }
 
 // --- Deterministic Agent Movement ---
-// Job + personality traits → weighted destination
+// Dimensions (extroversion, curiosity, restlessness) + job → weighted destination
 export function moveAgent(agent) {
   const job = getJob(agent.job);
+  const dims = agent.dimensions || {};
+  const restlessness = dims.restlessness ?? 0.5;
+  const curiosity = dims.curiosity ?? 0.5;
+
+  // High restlessness = more likely to move. Low = stays put.
+  if (Math.random() > restlessness) return { moved: false };
+
   const currentSpace = worldState.spaces.find(s => s.id === agent.state.space_id);
   if (!currentSpace) return;
 
-  // Build weighted list of destinations
   const destinations = [];
   for (const space of worldState.spaces) {
-    let weight = 1; // base weight for any space
+    let weight = 1;
     // Job preference
     if (job.preferred_spaces.includes(space.id)) weight += 5;
-    // Already there — less likely to move
-    if (space.id === agent.state.space_id) weight += 3;
-    // Discovered spaces only (agent must have been there or adjacent)
+    // Already there — low restlessness agents stay
+    if (space.id === agent.state.space_id) weight += (1 - restlessness) * 5;
+    // Must be connected to a discovered space
     if (!agent.cognition.discovered_spaces.includes(space.id)) {
-      // Check if connected to a discovered space
       const connected = space.connections.some(c => agent.cognition.discovered_spaces.includes(c));
-      if (!connected) continue; // can't go there
-      weight += 2; // novelty bonus for newly discovered
+      if (!connected) continue;
+      // Curiosity drives exploration of undiscovered spaces
+      weight += curiosity * 5;
     }
-    // Behavior traits influence
-    for (const trait of agent.behavior_traits) {
-      if (trait === "adventurous" && space.id !== agent.state.space_id) weight += 2;
-      if (trait === "sleepy" && space.id === agent.state.space_id) weight += 3;
-      if (trait === "curious" && !agent.cognition.discovered_spaces.includes(space.id)) weight += 3;
-      if (trait === "clingy" && space.id === agent.state.space_id) weight += 2;
+    // High curiosity → more weight on new spaces
+    if (space.id !== agent.state.space_id && !agent.cognition.discovered_spaces.includes(space.id)) {
+      weight += curiosity * 3;
     }
     destinations.push({ space_id: space.id, weight });
   }
 
-  // Weighted random selection
   const totalWeight = destinations.reduce((s, d) => s + d.weight, 0);
   let roll = Math.random() * totalWeight;
-  let chosen = destinations[0].space_id;
+  let chosen = destinations[0]?.space_id || currentSpace.id;
   for (const d of destinations) {
     roll -= d.weight;
     if (roll <= 0) { chosen = d.space_id; break; }
   }
 
-  // Update agent position
   if (chosen !== agent.state.space_id) {
     const newSpace = worldState.spaces.find(s => s.id === chosen);
     agent.state.space_id = chosen;
@@ -83,30 +84,47 @@ export function moveAgent(agent) {
 }
 
 // --- Deterministic Action Selection ---
-// Job behaviors → weighted action
+// Job behaviors → space-aware + personality-influenced action
 export function selectAction(agent) {
   const job = getJob(agent.job);
   const space = worldState.spaces.find(s => s.id === agent.state.space_id);
-  const behaviors = job.behaviors;
-  // Filter behaviors valid for current space
-  let validBehaviors = behaviors;
-  if (space && space.items.length === 0) {
-    // No items to interact with — remove item-based behaviors
-    validBehaviors = behaviors.filter(b => !b.includes("organize") && !b.includes("catalog") && !b.includes("repair"));
+  const dims = agent.dimensions || {};
+  const sociability = dims.sociability ?? 0.3;
+  const boldness = dims.boldness ?? 0.4;
+
+  let validBehaviors = [...job.behaviors];
+
+  // Space-aware filtering — gardener can't tend plants in archives
+  if (space) {
+    if (space.id === "archives" && agent.job === "gardener") {
+      validBehaviors = validBehaviors.filter(b => !["tend_plants", "water_fountain", "watch_sky"].includes(b));
+      validBehaviors = [...validBehaviors, "observe", "wander"];
+    }
+    if (space.id === "garden_courtyard" && agent.job === "archivist") {
+      validBehaviors = validBehaviors.filter(b => !["catalog", "preserve", "guard_archives"].includes(b));
+      validBehaviors = [...validBehaviors, "observe", "wander"];
+    }
+    if (space.items.length === 0) {
+      validBehaviors = validBehaviors.filter(b => !["organize_shelves", "catalog", "repair", "organize"].includes(b));
+    }
   }
-  if (validBehaviors.length === 0) validBehaviors = ["idle", "observe"];
-  // Add idle as fallback
-  validBehaviors = [...validBehaviors, "idle", "idle"];
-  // Weight by personality
-  if (agent.personality === "sleepy") validBehaviors.push("idle", "idle");
-  if (agent.personality === "playful") validBehaviors.push("explore", "wander");
-  if (agent.personality === "curious") validBehaviors.push("explore", "observe");
+
+  if (validBehaviors.length === 0) validBehaviors = ["observe", "idle"];
+
+  // Add idle as fallback, weighted by low boldness
+  validBehaviors = [...validBehaviors, "idle"];
+  if (boldness < 0.3) validBehaviors.push("idle", "idle");
+
+  // Sociable agents more likely to "observe" (look for others)
+  if (sociability > 0.5) validBehaviors.push("observe");
+
   const action = validBehaviors[Math.floor(Math.random() * validBehaviors.length)];
   agent.state.action = action;
   return action;
 }
 
-// --- Proximity Check ---
+// --- Proximity & Agent Interaction ---
+// Sociability + extroversion → chance to interact with nearby agents
 export function getNearbyAgents(agent, radius = 15) {
   return agents.filter(a => {
     if (a.id === agent.id) return false;
@@ -116,6 +134,63 @@ export function getNearbyAgents(agent, radius = 15) {
     const dist = Math.sqrt(dx * dx + dy * dy);
     return dist <= radius;
   });
+}
+
+export function processProximityInteractions(agent, nearbyAgents) {
+  const dims = agent.dimensions || {};
+  const sociability = dims.sociability ?? 0.3;
+  const extroversion = dims.extroversion ?? 0.5;
+  const events = [];
+
+  for (const other of nearbyAgents) {
+    // Cooldown check
+    if (agent.state.conversation_cooldown > 0) continue;
+
+    // Interaction chance = sociability * extroversion * 0.4 (max ~40% per tick per pair)
+    const interactChance = sociability * extroversion * 0.4;
+    if (Math.random() > interactChance) continue;
+
+    // Determine interaction type based on personality
+    const interactionTypes = [];
+    if (agent.personality === "mischievous") interactionTypes.push("playful_comment", "observation");
+    if (agent.personality === "grumpy") interactionTypes.push("curt_remark", "observation");
+    if (agent.personality === "curious") interactionTypes.push("question", "observation");
+    if (agent.personality === "zen") interactionTypes.push("quiet_acknowledgment");
+    if (agent.personality === "clingy") interactionTypes.push("greeting", "observation");
+    if (agent.personality === "aloof") interactionTypes.push("brief_nod");
+    if (agent.personality === "playful") interactionTypes.push("greeting", "playful_comment");
+    if (interactionTypes.length === 0) interactionTypes.push("observation");
+
+    const interaction = interactionTypes[Math.floor(Math.random() * interactionTypes.length)];
+
+    // Build relationship
+    if (!agent.cognition.relationships[other.id]) {
+      agent.cognition.relationships[other.id] = { affinity: 0, last_interaction: null };
+    }
+    agent.cognition.relationships[other.id].last_interaction = new Date().toISOString();
+    // Affinity shifts based on interaction type
+    if (["greeting", "question", "quiet_acknowledgment", "brief_nod"].includes(interaction)) {
+      agent.cognition.relationships[other.id].affinity += 0.1;
+    }
+    if (["playful_comment"].includes(interaction)) {
+      agent.cognition.relationships[other.id].affinity += 0.05;
+    }
+
+    agent.cognition.known_agents = [...new Set([...agent.cognition.known_agents, other.id])];
+    agent.state.conversation_cooldown = 2 + Math.floor(Math.random() * 3);
+    agent.stats.conversations_had++;
+
+    events.push({
+      type: "agent_interaction",
+      agent_id: agent.id,
+      agent_name: agent.name,
+      target_id: other.id,
+      target_name: other.name,
+      interaction,
+      content: `${agent.name} ${interaction.replace(/_/g, " ")} toward ${other.name}`,
+    });
+  }
+  return events;
 }
 
 // --- Event Generation (deterministic) ---

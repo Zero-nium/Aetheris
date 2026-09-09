@@ -2,7 +2,7 @@
 // Runs the simulation: world events → agent actions → proximity → log
 // =====================================================
 
-import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNearbyAgents, generateWorldEvent } from "./simulation.js";
+import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNearbyAgents, generateWorldEvent, processProximityInteractions } from "./simulation.js";
 import { getJob } from "../schema/world.js";
 
 let tickCount = 0;
@@ -60,20 +60,14 @@ export function runTick() {
     if (moodMap[action]) agent.state.mood = moodMap[action];
   }
 
-  // 3. Proximity interactions (deterministic check — LLM only if conversation warranted)
+  // 3. Proximity interactions (deterministic — driven by sociability + extroversion)
   for (const agent of agents) {
+    // Decrement cooldown
+    if (agent.state.conversation_cooldown > 0) agent.state.conversation_cooldown--;
     const nearby = getNearbyAgents(agent);
-    for (const other of nearby) {
-      // Only log proximity events occasionally (20% chance)
-      if (Math.random() < 0.2) {
-        events.push({
-          type: "proximity",
-          agents: [agent.name, other.name],
-          content: `${agent.name} and ${other.name} are near each other in ${state.spaces.find(s => s.id === agent.state.space_id)?.name || "the library"}`,
-        });
-        agent.cognition.known_agents = [...new Set([...agent.cognition.known_agents, other.id])];
-        other.cognition.known_agents = [...new Set([...other.cognition.known_agents, agent.id])];
-      }
+    if (nearby.length > 0) {
+      const interactionEvents = processProximityInteractions(agent, nearby);
+      events.push(...interactionEvents);
     }
   }
 
