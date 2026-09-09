@@ -31,9 +31,17 @@ for (const seed of seedAgents) {
 
 // --- API Routes ---
 
+// Resonance state (causality)
+import { getResonanceState } from "./engine/causality.js";
+
 // Health
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", tick: getTickCount(), agents: getAgents().length, spaces: getWorldState().spaces.length });
+  res.json({ status: "ok", tick: getTickCount(), agents: getAgents().length, spaces: getWorldState().spaces.length, resonance: getResonanceState() });
+});
+
+// Resonance
+app.get("/api/resonance", (_req, res) => {
+  res.json({ resonance: getResonanceState() });
 });
 
 // World state

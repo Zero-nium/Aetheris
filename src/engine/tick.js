@@ -3,6 +3,7 @@
 // =====================================================
 
 import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNearbyAgents, generateWorldEvent, processProximityInteractions } from "./simulation.js";
+import { accumulateResonance, decayResonance, checkResonanceTriggers, getResonanceState, EXPANSIONS } from "./causality.js";
 import { getJob } from "../schema/world.js";
 
 let tickCount = 0;
@@ -78,7 +79,81 @@ export function runTick() {
     agent.stats.events_experienced += agentEvents.length;
   }
 
-  return { tick: tickCount, events, agentCount: agents.length };
+  // 5. Accumulate resonance from agent actions (butterfly effect)
+  for (const agent of agents) {
+    if (agent.state.action && agent.state.action !== "idle") {
+      accumulateResonance(agent.state.action);
+    }
+  }
+
+  // 6. Decay resonance (things fade if not sustained)
+  decayResonance();
+
+  // 7. Check for world expansion triggers (consequence of accumulated actions)
+  const triggers = checkResonanceTriggers();
+  for (const trigger of triggers) {
+    const templates = EXPANSIONS[trigger.category] || [];
+    if (templates.length === 0) continue;
+    const template = templates[Math.floor(Math.random() * templates.length)];
+
+    if (template.type === "new_space") {
+      // Add new space to world
+      const existing = state.spaces.find(s => s.name === template.name);
+      if (!existing) {
+        const newSpace = {
+          id: template.name.toLowerCase().replace(/\s+/g, "_"),
+          name: template.name,
+          description: template.description,
+          connections: template.connections,
+          coordinates: template.coordinates,
+          size: "medium",
+          items: [],
+        };
+        state.spaces.push(newSpace);
+        // Add connection from parent space
+        for (const connId of template.connections) {
+          const parent = state.spaces.find(s => s.id === connId);
+          if (parent && !parent.connections.includes(newSpace.id)) {
+            parent.connections.push(newSpace.id);
+          }
+        }
+        // Let all agents discover the new space
+        for (const agent of agents) {
+          if (!agent.cognition.discovered_spaces.includes(newSpace.id)) {
+            agent.cognition.discovered_spaces.push(newSpace.id);
+          }
+        }
+        events.push({
+          type: "world_expansion",
+          category: trigger.category,
+          content: `A new space has emerged: ${template.name}. ${template.description}`,
+          space_id: newSpace.id,
+        });
+      }
+    } else if (template.type === "new_item") {
+      const space = state.spaces.find(s => s.id === template.space);
+      if (space) {
+        const existing = space.items.find(i => i.name === template.item.name);
+        if (!existing) {
+          space.items.push({ id: `item-${Date.now()}`, ...template.item });
+          events.push({
+            type: "world_expansion",
+            category: trigger.category,
+            content: `Something new appeared in ${space.name}: ${template.item.name}`,
+            space_id: space.id,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    tick: tickCount,
+    events,
+    agentCount: agents.length,
+    resonance: getResonanceState(),
+    spaceCount: state.spaces.length,
+  };
 }
 
 export function getTickCount() { return tickCount; }
