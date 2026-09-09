@@ -4,6 +4,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -110,6 +112,8 @@ app.post("/api/ticks/:count", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, '../public')));
 app.listen(PORT, () => {
   console.log(`Aetheris simulation running on port ${PORT}`);
   console.log(`Agents: ${getAgents().length}, Spaces: ${getWorldState().spaces.length}`);

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aetheris — Simulation</title>
+  <script src="/d3.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; color: #c9d1d9; font-family: 'Courier New', monospace; overflow: hidden; }
+    #app { display: flex; height: 100vh; }
+    
+    /* Map */
+    #map { flex: 1; position: relative; }
+    svg { width: 100%; height: 100%; }
+    
+    /* Sidebar */
+    #sidebar { width: 360px; border-left: 1px solid #1a1a2e; background: #0d0d15; display: flex; flex-direction: column; overflow: hidden; }
+    #sidebar h2 { font-size: 0.9rem; color: #58a6ff; padding: 15px 15px 10px; border-bottom: 1px solid #1a1a2e; }
+    
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid #1a1a2e; }
+    .tab-btn { flex: 1; padding: 8px; background: none; border: none; color: #6e7681; font-family: 'Courier New', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+    .tab-content { display: none; flex: 1; overflow-y: auto; padding: 10px; }
+    .tab-content.active { display: block; }
+    
+    /* Event log */
+    .event { padding: 8px 10px; border-bottom: 1px solid #14141f; font-size: 0.75rem; line-height: 1.4; }
+    .event .type { color: #6e7681; font-size: 0.65rem; text-transform: uppercase; }
+    .event .content { color: #c9d1d9; }
+    .event .agent { color: #58a6ff; }
+    .event.world_event .content { color: #e3b341; }
+    .event.world_expansion .content { color: #56d364; font-weight: bold; }
+    .event.agent_interaction .content { color: #bc8cff; }
+    
+    /* Resonance bars */
+    .resonance-item { margin-bottom: 10px; }
+    .resonance-label { font-size: 0.7rem; color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 3px; }
+    .resonance-bar { height: 4px; background: #14141f; border-radius: 2px; overflow: hidden; }
+    .resonance-fill { height: 100%; transition: width 0.3s; }
+    
+    /* Agent list */
+    .agent-item { padding: 8px 10px; border-bottom: 1px solid #14141f; font-size: 0.75rem; }
+    .agent-item .name { color: #58a6ff; font-weight: bold; }
+    .agent-item .job { color: #e3b341; font-size: 0.7rem; }
+    .agent-item .state { color: #6e7681; font-size: 0.65rem; }
+    
+    /* Controls */
+    .controls { padding: 10px; border-top: 1px solid #1a1a2e; display: flex; gap: 8px; }
+    .controls button { flex: 1; padding: 8px; background: #161b22; border: 1px solid #21262d; border-radius: 6px; color: #c9d1d9; font-family: 'Courier New', monospace; font-size: 0.8rem; cursor: pointer; }
+    .controls button:hover { background: #21262d; }
+    .controls .running { background: #238636; border-color: #238636; color: #fff; }
+    
+    /* D3 node styles */
+    .space-node { fill: #161b22; stroke: #30363d; stroke-width: 2; transition: all 0.3s; }
+    .space-node:hover { stroke: #58a6ff; }
+    .space-label { fill: #c9d1d9; font-size: 10px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
+    .space-desc { fill: #6e7681; font-size: 8px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
+    .link { stroke: #21262d; stroke-width: 1.5; }
+    .agent-dot { fill: #58a6ff; stroke: #0a0a0f; stroke-width: 1.5; }
+    .agent-name { fill: #58a6ff; font-size: 8px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
+    .item-dot { fill: #e3b341; r: 3; }
+    .new-space { fill: #238636; stroke: #56d364; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map">
+      <svg id="graph"></svg>
+    </div>
+    <div id="sidebar">
+      <h2>🌌 Aetheris</h2>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('events')">📡 Events</button>
+        <button class="tab-btn" onclick="switchTab('agents')">🧠 Inhabitants</button>
+        <button class="tab-btn" onclick="switchTab('resonance')">⚡ Resonance</button>
+      </div>
+      <div class="tab-content active" id="tab-events"></div>
+      <div class="tab-content" id="tab-agents"></div>
+      <div class="tab-content" id="tab-resonance"></div>
+      <div class="controls">
+        <button id="tick-btn" onclick="toggleRun()">▶ Start</button>
+        <button onclick="runTicks(1)">Step +1</button>
+        <button onclick="runTicks(10)">Step +10</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let running = false;
+    let runInterval = null;
+    let simulation = null;
+    let svg = null;
+    let g = null;
+    let linkGroup = null;
+    let nodeGroup = null;
+    let agentGroup = null;
+    let itemGroup = null;
+    let labelGroup = null;
+    let graphData = { nodes: [], links: [], agents: [], items: [] };
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+    }
+
+    function initGraph() {
+      const width = document.getElementById('map').clientWidth;
+      const height = document.getElementById('map').clientHeight;
+      svg = d3.select('#graph').attr('viewBox', `0 0 ${width} ${height}`);
+      g = svg.append('g');
+      linkGroup = g.append('g').attr('class', 'links');
+      itemGroup = g.append('g').attr('class', 'items');
+      nodeGroup = g.append('g').attr('class', 'nodes');
+      agentGroup = g.append('g').attr('class', 'agents');
+      labelGroup = g.append('g').attr('class', 'labels');
+      
+      simulation = d3.forceSimulation()
+        .force('link', d3.forceLink().id(d => d.id).distance(120).strength(0.1))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(50));
+      
+      simulation.on('tick', () => {
+        linkGroup.selectAll('line').attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+        itemGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+        agentGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+        labelGroup.selectAll('.space-label').attr('x', d => d.x).attr('y', d => d.y - 25);
+        labelGroup.selectAll('.space-desc').attr('x', d => d.x).attr('y', d => d.y + 30);
+        agentGroup.selectAll('.agent-name').attr('x', d => d.x).attr('y', d => d.y - 12);
+      });
+      
+      // Zoom
+      svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', (e) => g.attr('transform', e.transform)));
+    }
+
+    function updateGraph(data) {
+      // Build nodes from spaces
+      const nodes = data.spaces.map(s => ({ id: s.id, name: s.name, desc: s.description, items: s.items }));
+      // Build links from connections
+      const links = [];
+      for (const space of data.spaces) {
+        for (const conn of space.connections) {
+          if (nodes.find(n => n.id === conn)) {
+            links.push({ source: space.id, target: conn });
+          }
+        }
+      }
+      // Agent positions (relative to their space node)
+      const agents = data.agents.map(a => {
+        const space = nodes.find(n => n.id === a.space_id);
+        return { id: a.id, name: a.name, job: a.job, space_id: a.space_id, x: space?.x || 0, y: space?.y || 0, mood: a.mood };
+      });
+      
+      graphData = { nodes, links, agents };
+      
+      // Update links
+      linkGroup.selectAll('line').data(links).join('line').attr('class', 'link');
+      
+      // Update nodes
+      nodeGroup.selectAll('circle').data(nodes).join(
+        enter => enter.append('circle').attr('class', 'space-node').attr('r', 20),
+        update => update,
+        exit => exit.remove()
+      );
+      
+      // Update labels
+      labelGroup.selectAll('.space-label').data(nodes).join(
+        enter => enter.append('text').attr('class', 'space-label').text(d => d.name),
+        update => update.text(d => d.name),
+        exit => exit.remove()
+      );
+      labelGroup.selectAll('.space-desc').data(nodes).join(
+        enter => enter.append('text').attr('class', 'space-desc').text(d => d.items?.length > 0 ? `${d.items.length} items` : ''),
+        update => update,
+        exit => exit.remove()
+      );
+      
+      // Update agents — position at space node + offset
+      agentGroup.selectAll('circle').data(agents).join(
+        enter => enter.append('circle').attr('class', 'agent-dot').attr('r', 5),
+        update => update,
+        exit => exit.remove()
+      );
+      agentGroup.selectAll('.agent-name').data(agents).join(
+        enter => enter.append('text').attr('class', 'agent-name').text(d => d.name),
+        update => update.text(d => d.name),
+        exit => exit.remove()
+      );
+      
+      // Restart simulation
+      simulation.nodes(nodes);
+      simulation.force('link').links(links);
+      simulation.alpha(0.3).restart();
+    }
+
+    function updateEvents(events) {
+      const html = events.slice(0, 100).reverse().map(e => {
+        const typeCls = e.type.replace(/_/g, '_');
+        let content = e.content || '';
+        if (e.agent_name) content = `<span class="agent">${e.agent_name}</span> ${content.replace(e.agent_name + ' ', '')}`;
+        return `<div class="event ${typeCls}"><span class="type">${e.type}</span><span class="content">${content}</span></div>`;
+      }).join('');
+      document.getElementById('tab-events').innerHTML = html;
+    }
+
+    function updateAgents(agents) {
+      const html = agents.map(a => {
+        const dims = a.dimensions || {};
+        const dimStr = Object.entries(dims).map(([k,v]) => `${k.slice(0,3)}:${v.toFixed(1)}`).join(' ');
+        return `<div class="agent-item"><span class="name">${a.name}</span> <span class="job">${a.job}</span><div class="state">${a.state.space_id} • ${a.state.action} • ${a.state.mood}</div><div class="state">${dimStr}</div></div>`;
+      }).join('');
+      document.getElementById('tab-agents').innerHTML = html;
+    }
+
+    function updateResonance(resonance) {
+      const colors = { exploration: '#58a6ff', tending: '#56d364', knowledge: '#e3b341', social: '#bc8cff', mystery: '#f0883e' };
+      const html = Object.entries(resonance).map(([key, r]) => {
+        const pct = Math.round(parseFloat(r.value) / r.threshold * 100);
+        return `<div class="resonance-item"><div class="resonance-label"><span>${key}</span><span>${r.value}/${r.threshold}</span></div><div class="resonance-bar"><div class="resonance-fill" style="width:${pct}%;background:${colors[key] || '#58a6ff'}"></div></div></div>`;
+      }).join('');
+      document.getElementById('tab-resonance').innerHTML = html;
+    }
+
+    async function fetchWorld() {
+      try {
+        const res = await fetch('/api/world');
+        const data = await res.json();
+        updateGraph(data);
+        updateAgents(data.agents);
+      } catch (e) { console.error('fetchWorld', e); }
+    }
+
+    async function fetchEvents() {
+      try {
+        const res = await fetch('/api/events?limit=50');
+        const data = await res.json();
+        updateEvents(data.events);
+      } catch (e) { console.error('fetchEvents', e); }
+    }
+
+    async function fetchResonance() {
+      try {
+        const res = await fetch('/api/resonance');
+        const data = await res.json();
+        updateResonance(data.resonance);
+      } catch (e) { console.error('fetchResonance', e); }
+    }
+
+    async function runTicks(n) {
+      try {
+        await fetch('/api/ticks/' + n, { method: 'POST' });
+        await Promise.all([fetchWorld(), fetchEvents(), fetchResonance()]);
+      } catch (e) { console.error('runTicks', e); }
+    }
+
+    function toggleRun() {
+      running = !running;
+      const btn = document.getElementById('tick-btn');
+      if (running) {
+        btn.textContent = '⏸ Stop';
+        btn.classList.add('running');
+        runInterval = setInterval(() => runTicks(1), 2000);
+      } else {
+        btn.textContent = '▶ Start';
+        btn.classList.remove('running');
+        clearInterval(runInterval);
+      }
+    }
+
+    initGraph();
+    fetchWorld();
+    fetchEvents();
+    fetchResonance();
+  </script>
+</body>
+</html>
