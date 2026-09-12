@@ -6,6 +6,15 @@ import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNear
 import { accumulateResonance, decayResonance, checkResonanceTriggers, getResonanceState, EXPANSIONS } from "./causality.js";
 import { getJob } from "../schema/world.js";
 
+// Style anchors for event images — consistent across all renders
+export const IMAGE_STYLE = "anime style, ethereal atmosphere, soft twilight lighting, cel-shaded, warm golden tones with violet shadows, atmospheric, dreamlike, library setting";
+export const IMAGE_NEGATIVE = "text, watermark, people, realistic, 3d render, photorealistic, cluttered, harsh lighting";
+
+// Build a prompt for the image generator
+export function buildEventImagePrompt(sceneDescription) {
+  return `${sceneDescription}. ${IMAGE_STYLE}`;
+}
+
 let tickCount = 0;
 let lastEventTick = 0;
 
@@ -97,7 +106,6 @@ export function runTick() {
     const template = templates[Math.floor(Math.random() * templates.length)];
 
     if (template.type === "new_space") {
-      // Add new space to world
       const existing = state.spaces.find(s => s.name === template.name);
       if (!existing) {
         const newSpace = {
@@ -110,24 +118,25 @@ export function runTick() {
           items: [],
         };
         state.spaces.push(newSpace);
-        // Add connection from parent space
         for (const connId of template.connections) {
           const parent = state.spaces.find(s => s.id === connId);
           if (parent && !parent.connections.includes(newSpace.id)) {
             parent.connections.push(newSpace.id);
           }
         }
-        // Let all agents discover the new space
         for (const agent of agents) {
           if (!agent.cognition.discovered_spaces.includes(newSpace.id)) {
             agent.cognition.discovered_spaces.push(newSpace.id);
           }
         }
+        const imgPrompt = buildEventImagePrompt(`A new space has emerged in the library: ${template.name}. ${template.description}`);
         events.push({
           type: "world_expansion",
           category: trigger.category,
           content: `A new space has emerged: ${template.name}. ${template.description}`,
           space_id: newSpace.id,
+          image_prompt: imgPrompt,
+          significant: true,
         });
       }
     } else if (template.type === "new_item") {
@@ -136,11 +145,14 @@ export function runTick() {
         const existing = space.items.find(i => i.name === template.item.name);
         if (!existing) {
           space.items.push({ id: `item-${Date.now()}`, ...template.item });
+          const imgPrompt = buildEventImagePrompt(`Something new appeared in ${space.name}: ${template.item.name}. The ${space.name.toLowerCase()} of the twilight library.`);
           events.push({
             type: "world_expansion",
             category: trigger.category,
             content: `Something new appeared in ${space.name}: ${template.item.name}`,
             space_id: space.id,
+            image_prompt: imgPrompt,
+            significant: true,
           });
         }
       }

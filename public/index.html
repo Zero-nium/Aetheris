@@ -33,6 +33,10 @@
     .event.world_event .content { color: #e3b341; }
     .event.world_expansion .content { color: #56d364; font-weight: bold; }
     .event.agent_interaction .content { color: #bc8cff; }
+    .event-image { margin-top: 8px; }
+    .event-img { width: 100%; border-radius: 6px; border: 1px solid #21262d; }
+    .img-loading { color: #6e7681; font-size: 0.7rem; padding: 8px; }
+    .img-placeholder { color: #484f58; font-size: 0.7rem; padding: 8px; font-style: italic; }
     
     /* Resonance bars */
     .resonance-item { margin-bottom: 10px; }
@@ -204,9 +208,41 @@
         const typeCls = e.type.replace(/_/g, '_');
         let content = e.content || '';
         if (e.agent_name) content = `<span class="agent">${e.agent_name}</span> ${content.replace(e.agent_name + ' ', '')}`;
-        return `<div class="event ${typeCls}"><span class="type">${e.type}</span><span class="content">${content}</span></div>`;
+        let imgHtml = '';
+        if (e.image_prompt) {
+          const promptId = btoa(e.image_prompt).slice(0, 20);
+          imgHtml = `<div class="event-image" id="img-${promptId}" data-prompt="${escapeHtml(e.image_prompt)}"><div class="img-loading">Generating image...</div></div>`;
+          // Trigger image generation async
+          generateEventImage(promptId, e.image_prompt);
+        }
+        return `<div class="event ${typeCls}"><span class="type">${e.type}</span><span class="content">${content}</span>${imgHtml}</div>`;
       }).join('');
       document.getElementById('tab-events').innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function generateEventImage(elementId, prompt) {
+      try {
+        const res = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        const data = await res.json();
+        const el = document.getElementById('img-' + elementId);
+        if (!el) return;
+        if (data.url) {
+          el.innerHTML = `<img src="${data.url}" alt="Event image" class="event-img" />`;
+        } else {
+          el.innerHTML = `<div class="img-placeholder">${data.message || 'Image not available'}</div>`;
+        }
+      } catch (e) {
+        const el = document.getElementById('img-' + elementId);
+        if (el) el.innerHTML = `<div class="img-placeholder">Image failed</div>`;
+      }
     }
 
     function updateAgents(agents) {

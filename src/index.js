@@ -35,6 +35,8 @@ for (const seed of seedAgents) {
 
 // Resonance state (causality)
 import { getResonanceState } from "./engine/causality.js";
+import { buildEventImagePrompt, IMAGE_STYLE, IMAGE_NEGATIVE } from "./engine/tick.js";
+import fs from "fs";
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -113,7 +115,84 @@ app.post("/api/ticks/:count", (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, '../public')));
+
+// Image generation endpoint — generates event images on demand
+app.post("/api/generate-image", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt is required" });
+
+    const imageKey = process.env.IMAGE_API_KEY;
+    if (!imageKey) {
+      return res.json({ url: null, prompt, message: "Image generation not configured" });
+    }
+
+    // Submit to Fal.ai queue
+    const submitResponse = await fetch("https://queue.fal.run/fal-ai/fast-sdxl", {
+      method: "POST",
+      headers: {
+        "Authorization": `Key ${imageKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        negative_prompt: IMAGE_NEGATIVE,
+        image_size: "landscape_16_9",
+        num_inference_steps: 25,
+      }),
+    });
+
+    if (!submitResponse.ok) {
+      const errBody = await submitResponse.text();
+      return res.status(500).json({ error: `Fal.ai submit error: ${submitResponse.status}`, detail: errBody });
+    }
+
+    const submitData = await submitResponse.json();
+    const requestId = submitData.request_id;
+    const statusUrl = submitData.status_url;
+    const responseUrl = submitData.response_url;
+
+    // Poll for completion (max 30 seconds)
+    let imageUrl = null;
+    for (let i = 0; i < 60; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const statusResponse = await fetch(statusUrl, {
+        headers: { "Authorization": `Key ${imageKey}` },
+      });
+      const statusData = await statusResponse.json();
+      
+      if (statusData.status === "COMPLETED") {
+        const resultResponse = await fetch(responseUrl, {
+          headers: { "Authorization": `Key ${imageKey}` },
+        });
+        const resultData = await resultResponse.json();
+        imageUrl = resultData.images?.[0]?.url;
+        break;
+      }
+      if (statusData.status === "FAILED" || statusData.status === "ERROR") {
+        return res.status(500).json({ error: "Image generation failed", detail: statusData });
+      }
+    }
+
+    if (!imageUrl) {
+      return res.status(504).json({ error: "Image generation timed out" });
+    }
+
+    // Download and save locally
+    const imgResponse = await fetch(imageUrl);
+    const buffer = await imgResponse.arrayBuffer();
+    const imgDir = path.join(__dirname, "../public/images");
+    if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+    const filename = `evt-${Date.now()}.png`;
+    fs.writeFileSync(path.join(imgDir, filename), Buffer.from(buffer));
+
+    res.json({ url: `/images/${filename}`, prompt });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.use(express.static(path.join(__dirname, "../public")));
 app.listen(PORT, () => {
   console.log(`Aetheris simulation running on port ${PORT}`);
   console.log(`Agents: ${getAgents().length}, Spaces: ${getWorldState().spaces.length}`);
