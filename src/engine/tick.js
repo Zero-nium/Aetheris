@@ -6,15 +6,6 @@ import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNear
 import { accumulateResonance, decayResonance, checkResonanceTriggers, getResonanceState, EXPANSIONS } from "./causality.js";
 import { getJob } from "../schema/world.js";
 
-// Style anchors for event images — consistent across all renders
-export const IMAGE_STYLE = "anime style, ethereal atmosphere, soft twilight lighting, cel-shaded, warm golden tones with violet shadows, atmospheric, dreamlike, library setting";
-export const IMAGE_NEGATIVE = "text, watermark, people, realistic, 3d render, photorealistic, cluttered, harsh lighting";
-
-// Build a prompt for the image generator
-export function buildEventImagePrompt(sceneDescription) {
-  return `${sceneDescription}. ${IMAGE_STYLE}`;
-}
-
 let tickCount = 0;
 let lastEventTick = 0;
 
@@ -159,6 +150,12 @@ export function runTick() {
     }
   }
 
+  // Push all events to the global event log
+  const eventLog = getEventLog();
+  for (const e of events) {
+    eventLog.push({ ...e, id: `evt-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, timestamp: new Date().toISOString() });
+  }
+
   return {
     tick: tickCount,
     events,
@@ -169,3 +166,8 @@ export function runTick() {
 }
 
 export function getTickCount() { return tickCount; }
+
+// Style anchors for event images — consistent across all renders
+export const IMAGE_STYLE = "anime style, ethereal atmosphere, soft twilight lighting, cel-shaded, warm golden tones with violet shadows, atmospheric, dreamlike, library setting";
+export const IMAGE_NEGATIVE = "text, watermark, people, realistic, 3d render, photorealistic, cluttered, harsh lighting";
+export function buildEventImagePrompt(desc) { return `${desc}. ${IMAGE_STYLE}`; }

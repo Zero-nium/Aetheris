@@ -3,316 +3,313 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aetheris — Simulation</title>
+  <title>Aetheris</title>
   <script src="/d3.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0a0a0f; color: #c9d1d9; font-family: 'Courier New', monospace; overflow: hidden; }
-    #app { display: flex; height: 100vh; }
+    body { background: #0a0a0f; color: #c9d1d9; font-family: -apple-system, 'Segoe UI', sans-serif; overflow: hidden; }
+    a { color: #58a6ff; }
     
-    /* Map */
-    #map { flex: 1; position: relative; }
-    svg { width: 100%; height: 100%; }
+    /* Top bar */
+    #topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid #1a1a2e; background: #0d0d15; }
+    #topbar .logo { font-size: 1rem; font-weight: 700; color: #58a6ff; }
+    #topbar .controls { display: flex; gap: 6px; align-items: center; }
+    #topbar button, .nav-btn { padding: 5px 12px; background: #161b22; border: 1px solid #21262d; border-radius: 6px; color: #c9d1d9; font-family: inherit; font-size: 0.75rem; cursor: pointer; }
+    #topbar button:hover, .nav-btn:hover { background: #21262d; }
+    #topbar .running { background: #238636; border-color: #238636; color: #fff; }
+    .nav-btn.active { background: #1a1a2e; border-color: #58a6ff; color: #58a6ff; }
+    .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #f85149; margin-right: 4px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
     
-    /* Sidebar */
-    #sidebar { width: 360px; border-left: 1px solid #1a1a2e; background: #0d0d15; display: flex; flex-direction: column; overflow: hidden; }
-    #sidebar h2 { font-size: 0.9rem; color: #58a6ff; padding: 15px 15px 10px; border-bottom: 1px solid #1a1a2e; }
+    /* Main layout */
+    #main { display: flex; flex: 1; height: calc(100vh - 42px); }
     
-    /* Tabs */
-    .tabs { display: flex; border-bottom: 1px solid #1a1a2e; }
-    .tab-btn { flex: 1; padding: 8px; background: none; border: none; color: #6e7681; font-family: 'Courier New', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; }
-    .tab-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; }
-    .tab-content { display: none; flex: 1; overflow-y: auto; padding: 10px; }
-    .tab-content.active { display: block; }
+    /* View switching */
+    .view { display: none; flex: 1; overflow: hidden; }
+    .view.active { display: flex; }
     
-    /* Event log */
-    .event { padding: 8px 10px; border-bottom: 1px solid #14141f; font-size: 0.75rem; line-height: 1.4; }
-    .event .type { color: #6e7681; font-size: 0.65rem; text-transform: uppercase; }
-    .event .content { color: #c9d1d9; }
-    .event .agent { color: #58a6ff; }
-    .event.world_event .content { color: #e3b341; }
-    .event.world_expansion .content { color: #56d364; font-weight: bold; }
-    .event.agent_interaction .content { color: #bc8cff; }
-    .event-image { margin-top: 8px; }
-    .event-img { width: 100%; border-radius: 6px; border: 1px solid #21262d; }
-    .img-loading { color: #6e7681; font-size: 0.7rem; padding: 8px; }
-    .img-placeholder { color: #484f58; font-size: 0.7rem; padding: 8px; font-style: italic; }
+    /* === WORLD VIEW === */
+    #world-view { flex: 1; }
     
-    /* Resonance bars */
-    .resonance-item { margin-bottom: 10px; }
-    .resonance-label { font-size: 0.7rem; color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 3px; }
-    .resonance-bar { height: 4px; background: #14141f; border-radius: 2px; overflow: hidden; }
-    .resonance-fill { height: 100%; transition: width 0.3s; }
-    
-    /* Agent list */
-    .agent-item { padding: 8px 10px; border-bottom: 1px solid #14141f; font-size: 0.75rem; }
-    .agent-item .name { color: #58a6ff; font-weight: bold; }
-    .agent-item .job { color: #e3b341; font-size: 0.7rem; }
-    .agent-item .state { color: #6e7681; font-size: 0.65rem; }
-    
-    /* Controls */
-    .controls { padding: 10px; border-top: 1px solid #1a1a2e; display: flex; gap: 8px; }
-    .controls button { flex: 1; padding: 8px; background: #161b22; border: 1px solid #21262d; border-radius: 6px; color: #c9d1d9; font-family: 'Courier New', monospace; font-size: 0.8rem; cursor: pointer; }
-    .controls button:hover { background: #21262d; }
-    .controls .running { background: #238636; border-color: #238636; color: #fff; }
-    
-    /* D3 node styles */
-    .space-node { fill: #161b22; stroke: #30363d; stroke-width: 2; transition: all 0.3s; }
-    .space-node:hover { stroke: #58a6ff; }
-    .space-label { fill: #c9d1d9; font-size: 10px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
-    .space-desc { fill: #6e7681; font-size: 8px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
+    /* Map panel */
+    #map { width: 300px; border-right: 1px solid #1a1a2e; background: #0a0a0f; position: relative; flex-shrink: 0; }
+    #map svg { width: 100%; height: calc(100% - 120px); }
+    .space-node { fill: #161b22; stroke: #30363d; stroke-width: 2; }
+    .space-label { fill: #c9d1d9; font-size: 9px; text-anchor: middle; pointer-events: none; }
     .link { stroke: #21262d; stroke-width: 1.5; }
-    .agent-dot { fill: #58a6ff; stroke: #0a0a0f; stroke-width: 1.5; }
-    .agent-name { fill: #58a6ff; font-size: 8px; font-family: 'Courier New', monospace; text-anchor: middle; pointer-events: none; }
-    .item-dot { fill: #e3b341; r: 3; }
-    .new-space { fill: #238636; stroke: #56d364; }
+    .agent-dot { fill: #58a6ff; stroke: #0a0a0f; stroke-width: 1; }
+    .agent-label { fill: #58a6ff; font-size: 7px; text-anchor: middle; pointer-events: none; }
+    
+    /* Resonance bar */
+    #resonance-bar { position: absolute; bottom: 0; left: 0; right: 0; background: #0d0d15; border-top: 1px solid #1a1a2e; padding: 8px 10px; max-height: 120px; overflow-y: auto; }
+    .res-item { margin-bottom: 6px; }
+    .res-label { font-size: 0.6rem; color: #8b949e; display: flex; justify-content: space-between; }
+    .res-track { height: 3px; background: #14141f; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    .res-fill { height: 100%; transition: width 0.3s; }
+    
+    /* Event feed (left column) */
+    #event-feed { width: 300px; border-right: 1px solid #1a1a2e; background: #0d0d15; overflow-y: auto; flex-shrink: 0; }
+    .feed-header { font-size: 0.8rem; font-weight: 700; color: #58a6ff; padding: 10px 12px 6px; border-bottom: 1px solid #1a1a2e; position: sticky; top: 0; background: #0d0d15; z-index: 1; }
+    .feed-item { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #14141f; }
+    .feed-item .avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; background: #1a1a2e; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
+    .feed-item .content { flex: 1; font-size: 0.72rem; line-height: 1.3; }
+    .feed-item .agent-name { color: #58a6ff; font-weight: 600; }
+    .feed-item .action-text { color: #c9d1d9; }
+    .feed-item .time { font-size: 0.6rem; color: #484f58; flex-shrink: 0; }
+    
+    /* World feed (right column) */
+    #world-feed { flex: 1; overflow-y: auto; padding: 12px; background: #0a0a0f; }
+    .world-feed-header { font-size: 0.85rem; font-weight: 700; color: #f0883e; margin-bottom: 12px; }
+    .world-card { margin-bottom: 16px; background: #161b22; border: 1px solid #21262d; border-radius: 10px; overflow: hidden; }
+    .world-card img { width: 100%; display: block; }
+    .world-card .card-body { padding: 12px; }
+    .world-card .card-type { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .world-card .card-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+    .world-card .card-desc { font-size: 0.72rem; color: #8b949e; line-height: 1.4; }
+    .world-card .card-time { font-size: 0.6rem; color: #484f58; margin-top: 6px; }
+    .world-card .card-footer { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 0.6rem; }
+    .world-card .avatars { display: flex; gap: 2px; }
+    .world-card .avatars .avatar { width: 20px; height: 20px; border-radius: 50%; background: #1a1a2e; }
+    .type-world_event { border-color: #e3b34144; }
+    .type-world_event .card-type { color: #e3b341; }
+    .type-world_event .card-title { color: #e3b341; }
+    .type-world_expansion { border-color: #56d36444; }
+    .type-world_expansion .card-type { color: #56d364; }
+    .type-world_expansion .card-title { color: #56d364; }
+    .type-agent_interaction { border-color: #bc8cff44; }
+    .type-agent_interaction .card-type { color: #bc8cff; }
+    .type-agent_interaction .card-title { color: #bc8cff; }
+    
+    /* Text-only world events (no image) */
+    .text-event { padding: 10px 12px; margin-bottom: 8px; background: #111; border-radius: 8px; border: 1px solid #1a1a2e; }
+    .text-event .type { font-size: 0.6rem; text-transform: uppercase; color: #6e7681; }
+    .text-event .content { font-size: 0.75rem; color: #c9d1d9; margin-top: 2px; }
+    .text-event .time { font-size: 0.6rem; color: #484f58; margin-top: 4px; }
+    
+    /* === CHAT VIEW === */
+    #chat-view { display: none; flex: 1; }
+    #chat-view.active { display: flex; }
+    #chat-sidebar { width: 220px; border-right: 1px solid #1a1a2e; background: #0d0d15; overflow-y: auto; }
+    #chat-sidebar h3 { font-size: 0.8rem; font-weight: 700; padding: 12px 14px 8px; border-bottom: 1px solid #1a1a2e; }
+    .friend-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #14141f; }
+    .friend-item:hover { background: #14141f; }
+    .friend-item.active { background: #1a1a2e; }
+    .friend-item .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1a1a2e; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+    .friend-item .name { font-size: 0.8rem; font-weight: 600; color: #c9d1d9; }
+    .friend-item .status { font-size: 0.6rem; color: #56d364; }
+    
+    #chat-profile { width: 200px; border-right: 1px solid #1a1a2e; background: #0d0d15; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    #chat-profile .big-avatar { width: 100px; height: 100px; border-radius: 50%; background: #1a1a2e; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 12px; border: 2px solid #58a6ff44; }
+    #chat-profile .name { font-size: 1.1rem; font-weight: 700; color: #c9d1d9; }
+    #chat-profile .status { font-size: 0.7rem; color: #56d364; margin-top: 4px; }
+    #chat-profile .info { font-size: 0.7rem; color: #8b949e; margin-top: 12px; text-align: center; line-height: 1.4; }
+    
+    #chat-main { flex: 1; display: flex; flex-direction: column; }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 16px; }
+    .msg { display: flex; gap: 8px; margin-bottom: 12px; }
+    .msg .avatar { width: 28px; height: 28px; border-radius: 50%; background: #1a1a2e; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
+    .msg .bubble { max-width: 70%; padding: 8px 12px; border-radius: 12px; font-size: 0.8rem; line-height: 1.4; }
+    .msg .bubble .sender { font-size: 0.65rem; font-weight: 700; margin-bottom: 2px; }
+    .msg.user { flex-direction: row-reverse; }
+    .msg.user .bubble { background: #1a1a2e; }
+    .msg.user .bubble .sender { color: #c9d1d9; }
+    .msg.agent .bubble { background: #161b22; border: 1px solid #21262d; }
+    .msg.agent .bubble .sender { color: #58a6ff; }
+    #chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #1a1a2e; }
+    #chat-input input { flex: 1; padding: 8px 12px; background: #161b22; border: 1px solid #21262d; border-radius: 20px; color: #c9d1d9; font-family: inherit; font-size: 0.8rem; }
+    #chat-input input:focus { outline: none; border-color: #58a6ff; }
+    #chat-input button { padding: 8px 20px; background: #58a6ff; border: none; border-radius: 20px; color: #0a0a0f; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
+    #chat-input button:hover { background: #79b8ff; }
   </style>
 </head>
 <body>
-  <div id="app">
-    <div id="map">
-      <svg id="graph"></svg>
+  <div id="topbar">
+    <div class="logo">🗺️ Aetheris</div>
+    <div class="controls">
+      <button class="nav-btn active" id="nav-world" onclick="switchView('world')">🌍 World</button>
+      <button class="nav-btn" id="nav-chat" onclick="switchView('chat')">💬 Chat</button>
+      <button id="run-btn" onclick="toggleRun()">▶ Start</button>
+      <button onclick="runTicks(1)">Step</button>
     </div>
-    <div id="sidebar">
-      <h2>🌌 Aetheris</h2>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('events')">📡 Events</button>
-        <button class="tab-btn" onclick="switchTab('agents')">🧠 Inhabitants</button>
-        <button class="tab-btn" onclick="switchTab('resonance')">⚡ Resonance</button>
+  </div>
+  <div id="main">
+    <!-- WORLD VIEW -->
+    <div class="view active" id="world-view">
+      <div id="map">
+        <svg id="graph"></svg>
+        <div id="resonance-bar"></div>
       </div>
-      <div class="tab-content active" id="tab-events"></div>
-      <div class="tab-content" id="tab-agents"></div>
-      <div class="tab-content" id="tab-resonance"></div>
-      <div class="controls">
-        <button id="tick-btn" onclick="toggleRun()">▶ Start</button>
-        <button onclick="runTicks(1)">Step +1</button>
-        <button onclick="runTicks(10)">Step +10</button>
+      <div id="event-feed">
+        <div class="feed-header">📡 Inhabitants</div>
+        <div id="event-list"></div>
+      </div>
+      <div id="world-feed">
+        <div class="world-feed-header">🌍 World Feed</div>
+        <div id="world-cards"></div>
+      </div>
+    </div>
+    <!-- CHAT VIEW -->
+    <div class="view" id="chat-view">
+      <div id="chat-sidebar">
+        <h3>Friends</h3>
+        <div id="friend-list"></div>
+      </div>
+      <div id="chat-profile">
+        <div class="big-avatar" id="profile-avatar">🐱</div>
+        <div class="name" id="profile-name">Poly</div>
+        <div class="status"><span class="live-dot"></span>online</div>
+        <div class="info" id="profile-info">Librarian · Zen</div>
+      </div>
+      <div id="chat-main">
+        <div id="chat-messages" id="chat-messages"></div>
+        <div id="chat-input">
+          <input type="text" id="chat-text" placeholder="Message Poly..." onkeypress="if(event.key==='Enter')sendMessage()" />
+          <button onclick="sendMessage()">Send</button>
+        </div>
       </div>
     </div>
   </div>
-  
   <script>
-    let running = false;
-    let runInterval = null;
-    let simulation = null;
-    let svg = null;
-    let g = null;
-    let linkGroup = null;
-    let nodeGroup = null;
-    let agentGroup = null;
-    let itemGroup = null;
-    let labelGroup = null;
-    let graphData = { nodes: [], links: [], agents: [], items: [] };
-
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
-      document.getElementById('tab-' + tab).classList.add('active');
+    let running = false, runInterval = null;
+    let simulation = null, svg = null, g = null;
+    let linkG, nodeG, agentG, labelG;
+    let activeAgent = null;
+    
+    function switchView(view) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      if (view === 'world') { document.getElementById('world-view').classList.add('active'); document.getElementById('nav-world').classList.add('active'); }
+      if (view === 'chat') { document.getElementById('chat-view').classList.add('active'); document.getElementById('nav-chat').classList.add('active'); loadFriendList(); }
     }
-
+    
+    function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    
     function initGraph() {
-      const width = document.getElementById('map').clientWidth;
-      const height = document.getElementById('map').clientHeight;
-      svg = d3.select('#graph').attr('viewBox', `0 0 ${width} ${height}`);
+      const mapEl = document.getElementById('map');
+      const w = mapEl.clientWidth, h = mapEl.clientHeight - 120;
+      svg = d3.select('#graph').attr('viewBox', `0 0 ${w} ${h}`);
       g = svg.append('g');
-      linkGroup = g.append('g').attr('class', 'links');
-      itemGroup = g.append('g').attr('class', 'items');
-      nodeGroup = g.append('g').attr('class', 'nodes');
-      agentGroup = g.append('g').attr('class', 'agents');
-      labelGroup = g.append('g').attr('class', 'labels');
-      
+      linkG = g.append('g'); nodeG = g.append('g'); agentG = g.append('g'); labelG = g.append('g');
       simulation = d3.forceSimulation()
-        .force('link', d3.forceLink().id(d => d.id).distance(120).strength(0.1))
-        .force('charge', d3.forceManyBody().strength(-400))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(50));
-      
+        .force('link', d3.forceLink().id(d => d.id).distance(100).strength(0.1))
+        .force('charge', d3.forceManyBody().strength(-350))
+        .force('center', d3.forceCenter(w/2, h/2))
+        .force('collision', d3.forceCollide().radius(40));
       simulation.on('tick', () => {
-        linkGroup.selectAll('line').attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-        nodeGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
-        itemGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
-        agentGroup.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
-        labelGroup.selectAll('.space-label').attr('x', d => d.x).attr('y', d => d.y - 25);
-        labelGroup.selectAll('.space-desc').attr('x', d => d.x).attr('y', d => d.y + 30);
-        agentGroup.selectAll('.agent-name').attr('x', d => d.x).attr('y', d => d.y - 12);
+        linkG.selectAll('line').attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+        nodeG.selectAll('circle').attr('cx',d=>d.x).attr('cy',d=>d.y);
+        agentG.selectAll('circle').attr('cx',d=>d.x).attr('cy',d=>d.y);
+        labelG.selectAll('text').attr('x',d=>d.x).attr('y',d=>d.y-22);
       });
-      
-      // Zoom
-      svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', (e) => g.attr('transform', e.transform)));
+      svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', e => g.attr('transform', e.transform)));
     }
-
+    
     function updateGraph(data) {
-      // Build nodes from spaces
-      const nodes = data.spaces.map(s => ({ id: s.id, name: s.name, desc: s.description, items: s.items }));
-      // Build links from connections
+      const nodes = data.spaces.map(s => ({id:s.id, name:s.name}));
       const links = [];
-      for (const space of data.spaces) {
-        for (const conn of space.connections) {
-          if (nodes.find(n => n.id === conn)) {
-            links.push({ source: space.id, target: conn });
-          }
-        }
-      }
-      // Agent positions (relative to their space node)
+      data.spaces.forEach(s => { s.connections.forEach(c => { if(nodes.find(n=>n.id===c)) links.push({source:s.id, target:c}); }); });
       const agents = data.agents.map(a => {
-        const space = nodes.find(n => n.id === a.space_id);
-        return { id: a.id, name: a.name, job: a.job, space_id: a.space_id, x: space?.x || 0, y: space?.y || 0, mood: a.mood };
+        const n = nodes.find(n => n.id === a.space_id);
+        return {id:a.id, name:a.name, x:n?.x||0, y:n?.y||0};
       });
-      
-      graphData = { nodes, links, agents };
-      
-      // Update links
-      linkGroup.selectAll('line').data(links).join('line').attr('class', 'link');
-      
-      // Update nodes
-      nodeGroup.selectAll('circle').data(nodes).join(
-        enter => enter.append('circle').attr('class', 'space-node').attr('r', 20),
-        update => update,
-        exit => exit.remove()
-      );
-      
-      // Update labels
-      labelGroup.selectAll('.space-label').data(nodes).join(
-        enter => enter.append('text').attr('class', 'space-label').text(d => d.name),
-        update => update.text(d => d.name),
-        exit => exit.remove()
-      );
-      labelGroup.selectAll('.space-desc').data(nodes).join(
-        enter => enter.append('text').attr('class', 'space-desc').text(d => d.items?.length > 0 ? `${d.items.length} items` : ''),
-        update => update,
-        exit => exit.remove()
-      );
-      
-      // Update agents — position at space node + offset
-      agentGroup.selectAll('circle').data(agents).join(
-        enter => enter.append('circle').attr('class', 'agent-dot').attr('r', 5),
-        update => update,
-        exit => exit.remove()
-      );
-      agentGroup.selectAll('.agent-name').data(agents).join(
-        enter => enter.append('text').attr('class', 'agent-name').text(d => d.name),
-        update => update.text(d => d.name),
-        exit => exit.remove()
-      );
-      
-      // Restart simulation
+      linkG.selectAll('line').data(links).join('line').attr('class','link');
+      nodeG.selectAll('circle').data(nodes).join(enter=>enter.append('circle').attr('class','space-node').attr('r',16));
+      labelG.selectAll('text').data(nodes).join(enter=>enter.append('text').attr('class','space-label').text(d=>d.name), update=>update.text(d=>d.name));
+      agentG.selectAll('circle').data(agents).join(enter=>enter.append('circle').attr('class','agent-dot').attr('r',4));
       simulation.nodes(nodes);
       simulation.force('link').links(links);
       simulation.alpha(0.3).restart();
     }
-
-    function updateEvents(events) {
-      const html = events.slice(0, 100).reverse().map(e => {
-        const typeCls = e.type.replace(/_/g, '_');
-        let content = e.content || '';
-        if (e.agent_name) content = `<span class="agent">${e.agent_name}</span> ${content.replace(e.agent_name + ' ', '')}`;
-        let imgHtml = '';
+    
+    function updateEventFeed(events) {
+      const agentEvents = events.filter(e => e.type === 'agent_action' || e.type === 'agent_move' || e.type === 'agent_interaction').slice(-50);
+      const html = agentEvents.reverse().map(e => {
+        const name = e.agent_name || e.agents?.[0] || '?';
+        const icon = name.charAt(0).toUpperCase();
+        const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="feed-item"><div class="avatar">${icon}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(e.content || '').replace(name+' ','')}</span></div><div class="time">${time}</div></div>`;
+      }).join('');
+      document.getElementById('event-list').innerHTML = html;
+    }
+    
+    function updateWorldFeed(events) {
+      const significant = events.filter(e => e.type === 'world_event' || e.type === 'world_expansion' || e.type === 'agent_interaction' || (e.image_prompt));
+      const html = significant.slice(-30).reverse().map(e => {
+        const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
         if (e.image_prompt) {
-          const promptId = btoa(e.image_prompt).slice(0, 20);
-          imgHtml = `<div class="event-image" id="img-${promptId}" data-prompt="${escapeHtml(e.image_prompt)}"><div class="img-loading">Generating image...</div></div>`;
-          // Trigger image generation async
-          generateEventImage(promptId, e.image_prompt);
+          const id = btoa(e.image_prompt).slice(0,16);
+          return `<div class="world-card type-${e.type}"><div class="card-body"><div class="card-type">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.content||'')}</div><div class="card-time">${time}</div><div id="wimg-${id}" class="card-time" style="padding:20px;color:#484f58">Generating image...</div></div></div><script>generateImage('${id}',${JSON.stringify(e.image_prompt)})<\/script>`;
         }
-        return `<div class="event ${typeCls}"><span class="type">${e.type}</span><span class="content">${content}</span>${imgHtml}</div>`;
+        return `<div class="text-event"><div class="type">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="content">${escapeHtml(e.content||'')}</div><div class="time">${time}</div></div>`;
       }).join('');
-      document.getElementById('tab-events').innerHTML = html;
+      document.getElementById('world-cards').innerHTML = html;
     }
-
-    function escapeHtml(str) {
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    async function generateEventImage(elementId, prompt) {
+    
+    async function generateImage(id, prompt) {
+      const el = document.getElementById('wimg-' + id);
+      if (!el) return;
       try {
-        const res = await fetch('/api/generate-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
-        });
+        const res = await fetch('/api/generate-image', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt})});
         const data = await res.json();
-        const el = document.getElementById('img-' + elementId);
-        if (!el) return;
-        if (data.url) {
-          el.innerHTML = `<img src="${data.url}" alt="Event image" class="event-img" />`;
-        } else {
-          el.innerHTML = `<div class="img-placeholder">${data.message || 'Image not available'}</div>`;
-        }
-      } catch (e) {
-        const el = document.getElementById('img-' + elementId);
-        if (el) el.innerHTML = `<div class="img-placeholder">Image failed</div>`;
-      }
+        if (data.url) el.outerHTML = `<img src="${data.url}" alt="Event" />`;
+        else el.textContent = data.message || 'Image unavailable';
+      } catch(e) { el.textContent = 'Image failed'; }
     }
-
-    function updateAgents(agents) {
-      const html = agents.map(a => {
-        const dims = a.dimensions || {};
-        const dimStr = Object.entries(dims).map(([k,v]) => `${k.slice(0,3)}:${v.toFixed(1)}`).join(' ');
-        return `<div class="agent-item"><span class="name">${a.name}</span> <span class="job">${a.job}</span><div class="state">${a.state.space_id} • ${a.state.action} • ${a.state.mood}</div><div class="state">${dimStr}</div></div>`;
-      }).join('');
-      document.getElementById('tab-agents').innerHTML = html;
-    }
-
+    
     function updateResonance(resonance) {
-      const colors = { exploration: '#58a6ff', tending: '#56d364', knowledge: '#e3b341', social: '#bc8cff', mystery: '#f0883e' };
-      const html = Object.entries(resonance).map(([key, r]) => {
-        const pct = Math.round(parseFloat(r.value) / r.threshold * 100);
-        return `<div class="resonance-item"><div class="resonance-label"><span>${key}</span><span>${r.value}/${r.threshold}</span></div><div class="resonance-bar"><div class="resonance-fill" style="width:${pct}%;background:${colors[key] || '#58a6ff'}"></div></div></div>`;
+      const colors = {exploration:'#58a6ff',tending:'#56d364',knowledge:'#e3b341',social:'#bc8cff',mystery:'#f0883e'};
+      const html = Object.entries(resonance).map(([k,r]) => {
+        const pct = Math.round(parseFloat(r.value)/r.threshold*100);
+        return `<div class="res-item"><div class="res-label"><span>${k}</span><span>${r.value}/${r.threshold}</span></div><div class="res-track"><div class="res-fill" style="width:${pct}%;background:${colors[k]||'#58a6ff'}"></div></div></div>`;
       }).join('');
-      document.getElementById('tab-resonance').innerHTML = html;
+      document.getElementById('resonance-bar').innerHTML = html;
     }
-
-    async function fetchWorld() {
-      try {
-        const res = await fetch('/api/world');
-        const data = await res.json();
-        updateGraph(data);
-        updateAgents(data.agents);
-      } catch (e) { console.error('fetchWorld', e); }
+    
+    function loadFriendList() {
+      fetch('/api/agents').then(r=>r.json()).then(d => {
+        const html = d.agents.map((a,i) => `<div class="friend-item ${i===0?'active':''}" onclick="selectAgent('${a.id}')"><div class="avatar">${a.name[0].toUpperCase()}</div><div><div class="name">${escapeHtml(a.name)}</div><div class="status">online</div></div></div>`).join('');
+        document.getElementById('friend-list').innerHTML = html;
+        if (d.agents[0]) selectAgent(d.agents[0].id);
+      });
     }
-
-    async function fetchEvents() {
-      try {
-        const res = await fetch('/api/events?limit=50');
-        const data = await res.json();
-        updateEvents(data.events);
-      } catch (e) { console.error('fetchEvents', e); }
+    
+    function selectAgent(id) {
+      fetch('/api/agents/'+id).then(r=>r.json()).then(d => {
+        const a = d.agent; activeAgent = a;
+        document.getElementById('profile-avatar').textContent = a.name[0].toUpperCase();
+        document.getElementById('profile-name').textContent = a.name;
+        document.getElementById('profile-info').textContent = `${a.job} · ${a.personality}`;
+        document.getElementById('chat-text').placeholder = `Message ${a.name}...`;
+        document.getElementById('chat-messages').innerHTML = `<div class="msg agent"><div class="avatar">${a.name[0]}</div><div class="bubble"><div class="sender">${escapeHtml(a.name)}</div>Hi! I'm ${escapeHtml(a.name)}. I'm a ${escapeHtml(a.job)} in the ${escapeHtml(a.state.space_id.replace(/_/g,' '))}. What would you like to know?</div></div>`;
+      });
     }
-
-    async function fetchResonance() {
-      try {
-        const res = await fetch('/api/resonance');
-        const data = await res.json();
-        updateResonance(data.resonance);
-      } catch (e) { console.error('fetchResonance', e); }
+    
+    function sendMessage() {
+      const input = document.getElementById('chat-text');
+      const text = input.value.trim(); if (!text || !activeAgent) return;
+      const msgs = document.getElementById('chat-messages');
+      msgs.innerHTML += `<div class="msg user"><div class="avatar">You</div><div class="bubble"><div class="sender">You</div>${escapeHtml(text)}</div></div>`;
+      input.value = '';
+      msgs.innerHTML += `<div class="msg agent" style="opacity:0.5"><div class="avatar">${activeAgent.name[0]}</div><div class="bubble"><div class="sender">${escapeHtml(activeAgent.name)}</div><i>thinking...</i></div></div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+      // Placeholder — actual chat API to be wired
     }
-
+    
+    async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
+    async function fetchEvents() { try { const d = await (await fetch('/api/events?limit=50')).json(); updateEventFeed(d.events); updateWorldFeed(d.events); } catch(e){} }
+    async function fetchResonance() { try { const d = await (await fetch('/api/resonance')).json(); updateResonance(d.resonance); } catch(e){} }
+    
     async function runTicks(n) {
-      try {
-        await fetch('/api/ticks/' + n, { method: 'POST' });
-        await Promise.all([fetchWorld(), fetchEvents(), fetchResonance()]);
-      } catch (e) { console.error('runTicks', e); }
+      try { await fetch('/api/ticks/'+n, {method:'POST'}); await Promise.all([fetchWorld(), fetchEvents(), fetchResonance()]); } catch(e){}
     }
-
+    
     function toggleRun() {
-      running = !running;
-      const btn = document.getElementById('tick-btn');
-      if (running) {
-        btn.textContent = '⏸ Stop';
-        btn.classList.add('running');
-        runInterval = setInterval(() => runTicks(1), 2000);
-      } else {
-        btn.textContent = '▶ Start';
-        btn.classList.remove('running');
-        clearInterval(runInterval);
-      }
+      running = !running; const btn = document.getElementById('run-btn');
+      if (running) { btn.textContent = '⏸ Stop'; btn.classList.add('running'); runInterval = setInterval(()=>runTicks(1), 2000); }
+      else { btn.textContent = '▶ Start'; btn.classList.remove('running'); clearInterval(runInterval); }
     }
-
-    initGraph();
-    fetchWorld();
-    fetchEvents();
-    fetchResonance();
+    
+    initGraph(); fetchWorld(); fetchEvents(); fetchResonance();
   </script>
 </body>
 </html>
