@@ -12,6 +12,7 @@ dotenv.config();
 import { initWorld, getWorldState, getAgents, getEventLog, addAgent } from "./engine/simulation.js";
 import { createAgent, validateAgentDNA } from "./schema/agent.js";
 import { runTick, getTickCount } from "./engine/tick.js";
+import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured } from "./engine/persistence.js";
 
 const app = express();
 app.use(cors());
@@ -105,12 +106,40 @@ app.post("/api/tick", (_req, res) => {
 
 // Run multiple ticks
 app.post("/api/ticks/:count", (req, res) => {
-  const count = Math.min(parseInt(req.params.count) || 1, 10);
+  const count = Math.min(parseInt(req.params.count) || 1, 100);
   const results = [];
   for (let i = 0; i < count; i++) {
     results.push(runTick());
   }
   res.json({ ticks: results, count });
+});
+
+// --- Persistence endpoints ---
+
+// History (persisted events from Supabase)
+app.get("/api/history/events", async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+  const type = req.query.type || null;
+  if (!isDbConfigured()) return res.json({ events: [], message: "DB not configured" });
+  const events = await fetchEvents(limit, offset, type);
+  res.json({ events, count: events.length });
+});
+
+// History (persisted interactions)
+app.get("/api/history/interactions", async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+  if (!isDbConfigured()) return res.json({ interactions: [], message: "DB not configured" });
+  const interactions = await fetchInteractions(limit, offset);
+  res.json({ interactions, count: interactions.length });
+});
+
+// History (persisted agent states)
+app.get("/api/history/agents", async (_req, res) => {
+  if (!isDbConfigured()) return res.json({ agents: [], message: "DB not configured" });
+  const agents = await fetchLatestAgentStates();
+  res.json({ agents, count: agents.length });
 });
 
 const PORT = process.env.PORT || 3001;

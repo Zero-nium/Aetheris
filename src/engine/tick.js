@@ -5,6 +5,7 @@
 import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNearbyAgents, generateWorldEvent, processProximityInteractions } from "./simulation.js";
 import { accumulateResonance, decayResonance, checkResonanceTriggers, getResonanceState, EXPANSIONS } from "./causality.js";
 import { getJob } from "../schema/world.js";
+import { saveEvents, saveInteractions, saveAgentStates, saveWorldState, isDbConfigured } from "./persistence.js";
 
 let tickCount = 0;
 let lastEventTick = 0;
@@ -154,6 +155,14 @@ export function runTick() {
   const eventLog = getEventLog();
   for (const e of events) {
     eventLog.push({ ...e, id: `evt-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, timestamp: new Date().toISOString() });
+  }
+
+  // Persist to Supabase (fire-and-forget, don't block the tick)
+  if (isDbConfigured()) {
+    saveEvents(events, tickCount).catch(() => {});
+    saveInteractions(events, tickCount).catch(() => {});
+    saveAgentStates(agents, tickCount).catch(() => {});
+    saveWorldState(state, agents.length, tickCount).catch(() => {});
   }
 
   return {
