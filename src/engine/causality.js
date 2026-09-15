@@ -6,11 +6,11 @@
 
 // Resonance categories — each driven by specific agent actions
 export const RESONANCE = {
-  exploration: { value: 0, threshold: 5, decay: 0.1 },
-  tending: { value: 0, threshold: 6, decay: 0.15 },
-  knowledge: { value: 0, threshold: 4, decay: 0.1 },
-  social: { value: 0, threshold: 3, decay: 0.2 },
-  mystery: { value: 0, threshold: 4, decay: 0.05 },
+  exploration: { value: 0, threshold: 15, decay: 0.08 },
+  tending: { value: 0, threshold: 18, decay: 0.10 },
+  knowledge: { value: 0, threshold: 12, decay: 0.08 },
+  social: { value: 0, threshold: 10, decay: 0.12 },
+  mystery: { value: 0, threshold: 12, decay: 0.04 },
 };
 
 // Which actions accumulate which resonance
