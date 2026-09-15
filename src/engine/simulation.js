@@ -125,7 +125,7 @@ export function selectAction(agent) {
 
 // --- Proximity & Agent Interaction ---
 // Sociability + extroversion → chance to interact with nearby agents
-export function getNearbyAgents(agent, radius = 15) {
+export function getNearbyAgents(agent, radius = 30) {
   return agents.filter(a => {
     if (a.id === agent.id) return false;
     if (a.state.space_id !== agent.state.space_id) return false;
