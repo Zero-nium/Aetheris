@@ -15,6 +15,7 @@ import { runTick, getTickCount } from "./engine/tick.js";
 import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured } from "./engine/persistence.js";
 import { buildAgentRecall } from "./engine/eventContext.js";
 import { buildRenderPrompt } from "./schema/visualDNA.js";
+import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse } from "./engine/chat.js";
 
 const app = express();
 app.use(cors());
@@ -159,6 +160,71 @@ app.get("/api/agents/:id/recall", async (req, res) => {
     .map(e => buildAgentRecall(e, agent))
     .filter(Boolean);
   res.json({ agent: agent.name, recalls: recalls.slice(0, limit) });
+});
+
+// --- Chat: User ↔ Agent ---
+
+// Simple rate limiting — max 20 messages per minute per IP
+const rateLimitMap = new Map();
+function rateLimited(req, res, next) {
+  const ip = req.ip || req.socket?.remoteAddress || "unknown";
+  const now = Date.now();
+  if (!rateLimitMap.has(ip)) rateLimitMap.set(ip, []);
+  const times = rateLimitMap.get(ip).filter(t => now - t < 60000);
+  if (times.length >= 20) return res.status(429).json({ error: "Too many messages. Please slow down." });
+  times.push(now);
+  rateLimitMap.set(ip, times);
+  next();
+}
+
+// Send a message to an agent — agent responds deterministically
+app.post("/api/agents/:id/chat", rateLimited, async (req, res) => {
+  const agents = getAgents();
+  const agent = agents.find(a => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+  const userMessage = sanitizeInput(req.body?.message);
+  if (!userMessage) return res.status(400).json({ error: "Message is required" });
+  if (userMessage.length > 1000) return res.status(400).json({ error: "Message too long (max 1000 chars)" });
+
+  const userId = sanitizeInput(req.body?.user_id) || "anonymous";
+  const sessionId = sanitizeInput(req.body?.session_id) || generateSessionId();
+  const world = getWorldState();
+  const tick = getTickCount();
+
+  // Save user message
+  await saveMessage(agent.id, agent.name, userId, sessionId, "user", userMessage, tick);
+
+  // Fetch recent messages for context (last 10)
+  const recentMessages = isChatConfigured() ? await fetchMessages(agent.id, userId, 10) : [];
+
+  // Generate response
+  const response = generateResponse(agent, userMessage, recentMessages, agents, world);
+
+  // Save agent response
+  await saveMessage(agent.id, agent.name, userId, sessionId, "agent", response, tick);
+
+  res.json({
+    agent: agent.name,
+    session_id: sessionId,
+    response,
+    messages: [...recentMessages, { role: "user", content: userMessage }, { role: "agent", content: response }],
+  });
+});
+
+// Get message history for an agent+user
+app.get("/api/agents/:id/messages", async (req, res) => {
+  const agents = getAgents();
+  const agent = agents.find(a => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+  const userId = sanitizeInput(req.query.user_id) || "anonymous";
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+
+  if (!isChatConfigured()) return res.json({ messages: [], message: "Chat not configured" });
+
+  const messages = await fetchMessages(agent.id, userId, limit);
+  res.json({ agent: agent.name, messages, count: messages.length });
 });
 
 // Generate avatar for an agent — uses Fal.ai with the agent's visual DNA
