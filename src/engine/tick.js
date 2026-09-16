@@ -6,6 +6,7 @@ import { getWorldState, getAgents, getEventLog, moveAgent, selectAction, getNear
 import { accumulateResonance, decayResonance, checkResonanceTriggers, getResonanceState, EXPANSIONS } from "./causality.js";
 import { getJob } from "../schema/world.js";
 import { saveEvents, saveInteractions, saveAgentStates, saveWorldState, isDbConfigured } from "./persistence.js";
+import { enrichEvent } from "./eventContext.js";
 
 let tickCount = 0;
 let lastEventTick = 0;
@@ -151,23 +152,26 @@ export function runTick() {
     }
   }
 
+  // Enrich events with rich scenario context
+  const enrichedEvents = events.map(e => enrichEvent(e, agents, state, tickCount));
+
   // Push all events to the global event log
   const eventLog = getEventLog();
-  for (const e of events) {
-    eventLog.push({ ...e, id: `evt-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, timestamp: new Date().toISOString() });
+  for (const e of enrichedEvents) {
+    eventLog.push(e);
   }
 
   // Persist to Supabase (fire-and-forget, don't block the tick)
   if (isDbConfigured()) {
-    saveEvents(events, tickCount).catch(() => {});
-    saveInteractions(events, tickCount).catch(() => {});
+    saveEvents(enrichedEvents, tickCount).catch(() => {});
+    saveInteractions(enrichedEvents, tickCount).catch(() => {});
     saveAgentStates(agents, tickCount).catch(() => {});
     saveWorldState(state, agents.length, tickCount).catch(() => {});
   }
 
   return {
     tick: tickCount,
-    events,
+    events: enrichedEvents,
     agentCount: agents.length,
     resonance: getResonanceState(),
     spaceCount: state.spaces.length,

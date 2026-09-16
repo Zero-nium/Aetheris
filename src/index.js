@@ -13,6 +13,7 @@ import { initWorld, getWorldState, getAgents, getEventLog, addAgent } from "./en
 import { createAgent, validateAgentDNA } from "./schema/agent.js";
 import { runTick, getTickCount } from "./engine/tick.js";
 import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured } from "./engine/persistence.js";
+import { buildAgentRecall } from "./engine/eventContext.js";
 
 const app = express();
 app.use(cors());
@@ -140,6 +141,22 @@ app.get("/api/history/agents", async (_req, res) => {
   if (!isDbConfigured()) return res.json({ agents: [], message: "DB not configured" });
   const agents = await fetchLatestAgentStates();
   res.json({ agents, count: agents.length });
+});
+
+// Agent recall — how an agent would describe an event
+app.get("/api/agents/:id/recall", async (req, res) => {
+  const agentId = req.params.id;
+  const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+  if (!isDbConfigured()) return res.json({ recalls: [], message: "DB not configured" });
+  const events = await fetchEvents(limit * 3);
+  const agents = getAgents();
+  const agent = agents.find(a => a.id === agentId);
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
+  const recalls = events
+    .filter(e => e.type === "world_expansion" || e.type === "agent_interaction" || e.type === "world_event")
+    .map(e => buildAgentRecall(e, agent))
+    .filter(Boolean);
+  res.json({ agent: agent.name, recalls: recalls.slice(0, limit) });
 });
 
 const PORT = process.env.PORT || 3001;
