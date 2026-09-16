@@ -61,6 +61,7 @@ app.get("/api/world", (_req, res) => {
     spaces: world.spaces.map(s => ({
       id: s.id, name: s.name, description: s.description,
       connections: s.connections, coordinates: s.coordinates, size: s.size,
+      image_url: s.image_url || null,
       item_count: s.items.length,
     })),
     agents: getAgents().map(a => ({
