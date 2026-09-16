@@ -275,13 +275,27 @@
       selectedSpaceEl = d3.select(`circle[data-id="${id}"]`).node();
     }
 
+    let avatarMap = {}; // name → avatar_url
+    async function loadAvatarMap() {
+      try {
+        const d = await (await fetch('/api/agents')).json();
+        avatarMap = {};
+        for (const a of d.agents) { if (a.avatar_url) avatarMap[a.name] = a.avatar_url; }
+      } catch(e) {}
+    }
+    function getAvatar(name) {
+      const url = avatarMap[name];
+      if (url) return `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" alt="${escapeHtml(name)}" />`;
+      return (name || '?').charAt(0).toUpperCase();
+    }
+
     function updateEventFeed(events) {
       const agentEvents = events.filter(e => e.type === 'agent_action' || e.type === 'agent_move' || e.type === 'agent_interaction').slice(-50);
       const html = agentEvents.reverse().map(e => {
         const name = e.agent_name || e.agents?.[0] || '?';
-        const icon = name.charAt(0).toUpperCase();
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+        const avatar = getAvatar(name);
         let content;
         if (e.type === 'agent_interaction') {
           const target = e.target_name || e.agent_b || '?';
@@ -290,10 +304,10 @@
           } else {
             content = `<span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">→ ${escapeHtml(target)}</span> <span class="action-text">${escapeHtml(e.content || '')}</span>`;
           }
-          return `<div class="feed-item interaction"><div class="avatar">${icon}<span class="online-dot"></span></div><div class="content">${content}</div><div class="time">${time}</div></div>`;
+          return `<div class="feed-item interaction"><div class="avatar">${avatar}<span class="online-dot"></span></div><div class="content">${content}</div><div class="time">${time}</div></div>`;
         }
         content = (e.content || '').replace(name + ' ', '');
-        return `<div class="feed-item"><div class="avatar">${icon}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(content)}</span></div><div class="time">${time}</div></div>`;
+        return `<div class="feed-item"><div class="avatar">${avatar}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(content)}</span></div><div class="time">${time}</div></div>`;
       }).join('');
       document.getElementById('event-list').innerHTML = html;
     }
@@ -334,8 +348,10 @@
 
     function loadFriendList() {
       fetch('/api/agents').then(r=>r.json()).then(d => {
+        avatarMap = {};
+        for (const a of d.agents) { if (a.avatar_url) avatarMap[a.name] = a.avatar_url; }
         const html = d.agents.map((a,i) => {
-          const avatar = a.avatar_url ? `<img src="${a.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />` : a.name[0].toUpperCase();
+          const avatar = getAvatar(a.name);
           return `<div class="friend-item ${i===0?'active':''}" onclick="selectAgent('${a.id}')"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(a.name)}</div><div class="status">online</div></div></div>`;
         }).join('');
         document.getElementById('friend-list').innerHTML = html;
@@ -346,7 +362,7 @@
     function selectAgent(id) {
       fetch('/api/agents/'+id).then(r=>r.json()).then(d => {
         const a = d.agent; activeAgent = a;
-        const avatar = a.avatar_url ? `<img src="${a.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />` : a.name[0].toUpperCase();
+        const avatar = getAvatar(a.name);
         document.getElementById('profile-avatar').innerHTML = avatar;
         document.getElementById('profile-name').textContent = a.name;
         document.getElementById('profile-info').textContent = `${a.job} · ${a.personality}`;
@@ -393,7 +409,7 @@
       else { btn.textContent = '▶ Start'; btn.classList.remove('running'); clearInterval(runInterval); }
     }
 
-    initGraph(); fetchWorld(); fetchEvents(); fetchResonance();
+    initGraph(); loadAvatarMap().then(() => { fetchWorld(); fetchEvents(); fetchResonance(); });
   </script>
 </body>
 </html>
