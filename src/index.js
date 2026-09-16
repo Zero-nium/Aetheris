@@ -25,9 +25,9 @@ initWorld();
 
 // --- Seed initial agents ---
 const seedAgents = [
-  { id: "agent-poly", name: "Poly", job: "librarian", personality: "zen", behavior_traits: ["sleepy", "watchful", "zen", "clingy", "curious"], starting_space: "grand_atrium" },
-  { id: "agent-gene", name: "Gene", job: "cartographer", personality: "curious", behavior_traits: ["curious", "adventurous", "watchful", "playful", "mischievous"], starting_space: "archives" },
-  { id: "agent-esis", name: "Esis", job: "gardener", personality: "aloof", behavior_traits: ["sleepy", "aloof", "curious", "zen", "clingy"], starting_space: "garden_courtyard" },
+  { id: "agent-poly", name: "Poly", job: "librarian", personality: "zen", behavior_traits: ["sleepy", "watchful", "zen", "clingy", "curious"], starting_space: "grand_atrium", avatar_url: "/images/avatar-agent-poly.png" },
+  { id: "agent-gene", name: "Gene", job: "cartographer", personality: "curious", behavior_traits: ["curious", "adventurous", "watchful", "playful", "mischievous"], starting_space: "archives", avatar_url: "/images/avatar-agent-gene.png" },
+  { id: "agent-esis", name: "Esis", job: "gardener", personality: "aloof", behavior_traits: ["sleepy", "aloof", "curious", "zen", "clingy"], starting_space: "garden_courtyard", avatar_url: "/images/avatar-agent-esis.png" },
 ];
 for (const seed of seedAgents) {
   const agent = createAgent(seed);
