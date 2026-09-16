@@ -226,8 +226,10 @@
       const html = agentEvents.reverse().map(e => {
         const name = e.agent_name || e.agents?.[0] || '?';
         const icon = name.charAt(0).toUpperCase();
-        const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-        return `<div class="feed-item"><div class="avatar">${icon}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(e.content || '').replace(name+' ','')}</span></div><div class="time">${time}</div></div>`;
+        const ts = e.timestamp || e.created_at;
+        const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+        const content = (e.content || '').replace(name + ' ', '');
+        return `<div class="feed-item"><div class="avatar">${icon}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(content)}</span></div><div class="time">${time}</div></div>`;
       }).join('');
       document.getElementById('event-list').innerHTML = html;
     }
@@ -235,7 +237,8 @@
     function updateWorldFeed(events) {
       const significant = events.filter(e => e.type === 'world_event' || e.type === 'world_expansion' || e.type === 'agent_interaction' || (e.image_prompt));
       const html = significant.slice(-30).reverse().map(e => {
-        const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+        const ts = e.timestamp || e.created_at;
+        const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
         if (e.image_prompt) {
           const id = btoa(e.image_prompt).slice(0,16);
           return `<div class="world-card type-${e.type}"><div class="card-body"><div class="card-type">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.content||'')}</div><div class="card-time">${time}</div><div id="wimg-${id}" class="card-time" style="padding:20px;color:#484f58">Generating image...</div></div></div><script>generateImage('${id}',${JSON.stringify(e.image_prompt)})<\/script>`;
@@ -296,7 +299,24 @@
     }
     
     async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
-    async function fetchEvents() { try { const d = await (await fetch('/api/events?limit=50')).json(); updateEventFeed(d.events); updateWorldFeed(d.events); } catch(e){} }
+    async function fetchEvents() {
+      try {
+        // Fetch from both in-memory and persisted history
+        const [liveRes, histRes] = await Promise.all([
+          fetch('/api/events?limit=50').then(r=>r.json()).catch(()=>({events:[]})),
+          fetch('/api/history/events?limit=100').then(r=>r.json()).catch(()=>({events:[]}))
+        ]);
+        const liveEvents = liveRes.events || [];
+        const histEvents = histRes.events || [];
+        // Merge: use history events as base, append live events not already in history
+        const histTickSet = new Set(histEvents.map(e => e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)));
+        const merged = [...histEvents, ...liveEvents.filter(e => !histTickSet.has(e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)))];
+        // Sort by tick ascending
+        merged.sort((a,b) => (a.tick||0) - (b.tick||0));
+        updateEventFeed(merged);
+        updateWorldFeed(merged);
+      } catch(e) {}
+    }
     async function fetchResonance() { try { const d = await (await fetch('/api/resonance')).json(); updateResonance(d.resonance); } catch(e){} }
     
     async function runTicks(n) {
