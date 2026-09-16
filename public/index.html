@@ -31,7 +31,7 @@
     #world-view { flex: 1; }
 
     /* Map panel */
-    #map { width: 280px; border-right: 1px solid #eee; background: #fff; position: relative; flex-shrink: 0; }
+    #map { width: 340px; border-right: 1px solid #eee; background: #fff; position: relative; flex-shrink: 0; }
     #map svg { width: 100%; height: calc(100% - 120px); }
     .space-node { fill: #f0f0f5; stroke: #ddd; stroke-width: 2; }
     .space-node:hover { stroke: #ff6b9d; }
@@ -170,8 +170,9 @@
   <div id="main">
     <div class="view active" id="world-view">
       <div id="map">
-        <svg id="graph"></svg>
-        <div id="resonance-bar"></div>
+        <div id="map-bg" style="position:absolute;top:0;left:0;right:0;bottom:120px;background-size:cover;background-position:center;opacity:0.15;z-index:0;"></div>
+        <svg id="graph" style="position:relative;z-index:1;"></svg>
+        <div id="resonance-bar" style="position:relative;z-index:1;"></div>
       </div>
       <div id="event-feed">
         <div class="section-title">Event Feed</div>
@@ -261,18 +262,11 @@
 
     let selectedSpaceEl = null;
     function selectSpace(id, name, imageUrl) {
-      // Highlight selected node
-      if (selectedSpaceEl) selectedSpaceEl.style.stroke = '';
-      const mapBg = document.getElementById('map');
+      const mapBg = document.getElementById('map-bg');
       if (imageUrl) {
         mapBg.style.backgroundImage = `url(${imageUrl})`;
-        mapBg.style.backgroundSize = 'cover';
-        mapBg.style.backgroundPosition = 'center';
-        mapBg.style.backgroundBlendMode = 'multiply';
       }
-      // Update selected node stroke
       d3.selectAll('.space-node').style('stroke', function(d) { return d.id === id ? '#ff6b9d' : ''; });
-      selectedSpaceEl = d3.select(`circle[data-id="${id}"]`).node();
     }
 
     let avatarMap = {}; // name → avatar_url
@@ -318,6 +312,15 @@
       const html = items.map(e => {
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+        // Agent interaction — show avatars
+        if (e.type === 'agent_interaction') {
+          const avA = getAvatar(e.agent_name) || (e.agent_a || '?').charAt(0);
+          const avB = getAvatar(e.target_name || e.agent_b) || '?';
+          const dialogue = e.dialogue ? `<div style="margin:6px 0;font-style:italic;color:#c44d7a">"${escapeHtml(e.dialogue)}"</div>` : '';
+          const response = e.response ? `<div style="font-style:italic;color:#888;margin:4px 0">"${escapeHtml(e.response)}"</div>` : '';
+          return `<div class="feed-card type-${e.type}"><div class="card-body"><div class="card-tag tag-${e.type}">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.agent_name || '?')} → ${escapeHtml(e.target_name || e.agent_b || '?')}</div><div class="card-desc">${dialogue}${response}</div><div class="card-footer"><div class="card-avatars"><div class="mini-avatar">${avA}</div><div class="mini-avatar">${avB}</div></div><div class="card-time">${time}</div></div></div></div>`;
+        }
+        // World expansion — show image if generating
         if (e.image_prompt) {
           const id = btoa(e.image_prompt).slice(0,16).replace(/[^a-zA-Z0-9]/g,'');
           return `<div class="feed-card"><div class="card-body"><div class="card-tag tag-${e.type}">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.content||'')}</div><div class="card-time">${time}</div><div id="wimg-${id}" class="card-time" style="padding:16px;color:#bbb">Generating image...</div></div></div>`;
@@ -325,7 +328,6 @@
         return `<div class="text-event"><div class="type">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="content">${escapeHtml(e.content||'')}</div><div class="time">${time}</div></div>`;
       }).join('');
       document.getElementById('world-cards').innerHTML = html;
-      // Trigger image generation after DOM insert (inline scripts don't run in innerHTML)
       items.forEach(e => {
         if (e.image_prompt) {
           const id = btoa(e.image_prompt).slice(0,16).replace(/[^a-zA-Z0-9]/g,'');

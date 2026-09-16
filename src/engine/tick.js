@@ -11,6 +11,32 @@ import { enrichEvent } from "./eventContext.js";
 let tickCount = 0;
 let lastEventTick = 0;
 
+// Convert raw action to natural English
+function formatAction(action) {
+  const map = {
+    organize_shelves: "organizing shelves",
+    guide_visitors: "guiding visitors",
+    maintain_order: "maintaining order",
+    explore: "exploring",
+    map_spaces: "mapping spaces",
+    discover_passages: "discovering passages",
+    tend_plants: "tending plants",
+    water_fountain: "watering the fountain",
+    watch_sky: "watching the sky",
+    read: "reading",
+    research: "researching",
+    contemplate: "contemplating",
+    take_notes: "taking notes",
+    wander: "wandering",
+    observe: "observing",
+    play_music: "playing music",
+    debate: "debating",
+    rest: "resting",
+    idle: "idle",
+  };
+  return map[action] || action.replace(/_/g, " ");
+}
+
 export function runTick() {
   tickCount++;
   const events = [];
@@ -30,11 +56,13 @@ export function runTick() {
     if (Math.random() < 0.5) {
       const move = moveAgent(agent);
       if (move.moved) {
+        const fromName = state.spaces.find(s => s.id === move.from)?.name || move.from;
+        const toName = state.spaces.find(s => s.id === move.to)?.name || move.to;
         events.push({
           type: "agent_move",
           agent_id: agent.id,
           agent_name: agent.name,
-          content: `${agent.name} moved from ${move.from} to ${move.to}`,
+          content: `${agent.name} moved from ${fromName} to ${toName}`,
         });
       }
     }
@@ -45,12 +73,14 @@ export function runTick() {
 
     // Apply action effects (deterministic)
     if (action !== "idle") {
+      const spaceName = state.spaces.find(s => s.id === agent.state.space_id)?.name || "the library";
+      const actionText = formatAction(action);
       events.push({
         type: "agent_action",
         agent_id: agent.id,
         agent_name: agent.name,
         action,
-        content: `${agent.name} is ${action.replace(/_/g, " ")} in ${state.spaces.find(s => s.id === agent.state.space_id)?.name || "the library"}`,
+        content: `${agent.name} is ${actionText} in ${spaceName}`,
       });
     }
 
