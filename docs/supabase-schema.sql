@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS aetheris_interactions (
   interaction_type TEXT NOT NULL, -- observation, question, playful_comment, quiet_acknowledgment, etc.
   agent_a_space TEXT,            -- where it happened
   agent_b_space TEXT,
-  content TEXT NOT NULL,
+  content TEXT NOT NULL,         -- full conversation text
+  dialogue TEXT,                 -- what agent_a said
+  response TEXT,                 -- what agent_b said back
   affinity FLOAT DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -45,11 +45,13 @@ export async function saveInteractions(events, tick) {
   const rows = interactions.map(e => ({
     tick,
     agent_a: e.agent_name || e.agents?.[0] || null,
-    agent_b: e.target_agent || e.agents?.[1] || null,
+    agent_b: e.target_name || e.agents?.[1] || null,
     interaction_type: e.interaction_type || "observation",
     agent_a_space: e.agent_a_space || null,
     agent_b_space: e.agent_b_space || null,
     content: e.content || "",
+    dialogue: e.dialogue || null,
+    response: e.response || null,
     affinity: e.affinity || 0,
   }));
   try {

@@ -56,6 +56,8 @@
     .feed-item .agent-name { color: #58a6ff; font-weight: 600; }
     .feed-item .action-text { color: #c9d1d9; }
     .feed-item .time { font-size: 0.6rem; color: #484f58; flex-shrink: 0; }
+    .feed-item.interaction { background: #14141f; border-left: 2px solid #bc8cff; }
+    .feed-item.interaction em { color: #bc8cff; font-style: italic; }
     
     /* World feed (right column) */
     #world-feed { flex: 1; overflow-y: auto; padding: 12px; background: #0a0a0f; }
@@ -228,7 +230,17 @@
         const icon = name.charAt(0).toUpperCase();
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-        const content = (e.content || '').replace(name + ' ', '');
+        let content;
+        if (e.type === 'agent_interaction') {
+          const target = e.target_name || e.agent_b || '?';
+          if (e.dialogue) {
+            content = `<span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">→ ${escapeHtml(target)}:</span> <em>"${escapeHtml(e.dialogue)}"</em>${e.response ? ` <span class="action-text">↳ ${escapeHtml(target)}:</span> <em>"${escapeHtml(e.response)}"</em>` : ''}`;
+          } else {
+            content = `<span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">→ ${escapeHtml(target)}</span> <span class="action-text">${escapeHtml(e.content || '')}</span>`;
+          }
+          return `<div class="feed-item interaction"><div class="avatar">${icon}</div><div class="content">${content}</div><div class="time">${time}</div></div>`;
+        }
+        content = (e.content || '').replace(name + ' ', '');
         return `<div class="feed-item"><div class="avatar">${icon}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(content)}</span></div><div class="time">${time}</div></div>`;
       }).join('');
       document.getElementById('event-list').innerHTML = html;
