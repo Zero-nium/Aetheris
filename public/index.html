@@ -313,7 +313,10 @@
 
     function loadFriendList() {
       fetch('/api/agents').then(r=>r.json()).then(d => {
-        const html = d.agents.map((a,i) => `<div class="friend-item ${i===0?'active':''}" onclick="selectAgent('${a.id}')"><div class="avatar">${a.name[0].toUpperCase()}</div><div><div class="name">${escapeHtml(a.name)}</div><div class="status">online</div></div></div>`).join('');
+        const html = d.agents.map((a,i) => {
+          const avatar = a.avatar_url ? `<img src="${a.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />` : a.name[0].toUpperCase();
+          return `<div class="friend-item ${i===0?'active':''}" onclick="selectAgent('${a.id}')"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(a.name)}</div><div class="status">online</div></div></div>`;
+        }).join('');
         document.getElementById('friend-list').innerHTML = html;
         if (d.agents[0]) selectAgent(d.agents[0].id);
       });
@@ -322,11 +325,12 @@
     function selectAgent(id) {
       fetch('/api/agents/'+id).then(r=>r.json()).then(d => {
         const a = d.agent; activeAgent = a;
-        document.getElementById('profile-avatar').textContent = a.name[0].toUpperCase();
+        const avatar = a.avatar_url ? `<img src="${a.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />` : a.name[0].toUpperCase();
+        document.getElementById('profile-avatar').innerHTML = avatar;
         document.getElementById('profile-name').textContent = a.name;
         document.getElementById('profile-info').textContent = `${a.job} · ${a.personality}`;
         document.getElementById('chat-text').placeholder = `Message ${a.name}...`;
-        document.getElementById('chat-messages').innerHTML = `<div class="msg agent"><div class="avatar">${a.name[0]}</div><div class="bubble"><div class="sender">${escapeHtml(a.name)}</div>Hi! I'm ${escapeHtml(a.name)}. I'm a ${escapeHtml(a.job)} in the ${escapeHtml(a.state.space_id.replace(/_/g,' '))}. What would you like to know?</div></div>`;
+        document.getElementById('chat-messages').innerHTML = `<div class="msg agent"><div class="avatar">${avatar}</div><div class="bubble"><div class="sender">${escapeHtml(a.name)}</div>Hi! I'm ${escapeHtml(a.name)}. I'm a ${escapeHtml(a.job)} in the ${escapeHtml(a.state.space_id.replace(/_/g,' '))}. What would you like to know?</div></div>`;
       });
     }
 

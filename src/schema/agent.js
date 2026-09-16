@@ -34,6 +34,8 @@ export const TRAIT_INFLUENCE = {
   adventurous:  { extroversion: +0.2, curiosity: +0.3, restlessness: +0.4, sociability: +0.1, boldness: +0.3 },
 };
 
+import { generateDefaultVisualDNA, sanitizeVisualDNA, buildRenderPrompt } from "./visualDNA.js";
+
 export function createAgent(dna) {
   // Calculate personality dimensions from traits
   const dims = { ...{} };
@@ -62,11 +64,12 @@ export function createAgent(dna) {
   return {
     id: dna.id || `agent-${Date.now()}`,
     name: dna.name,
-    visual_dna: dna.visual_dna || {},
+    visual_dna: Object.keys(dna.visual_dna || {}).length > 0 ? sanitizeVisualDNA(dna.visual_dna) : generateDefaultVisualDNA(dna.name, dna.job, dna.personality),
     personality_dna: dna.personality_dna || {},
     personality: dna.personality || "curious",
     behavior_traits: dna.behavior_traits || [],
     job: dna.job || "wanderer",
+    avatar_url: dna.avatar_url || null,
     // Calculated dimensions — drives all behavior
     dimensions: dims,
     state: {

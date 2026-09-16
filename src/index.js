@@ -14,6 +14,7 @@ import { createAgent, validateAgentDNA } from "./schema/agent.js";
 import { runTick, getTickCount } from "./engine/tick.js";
 import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured } from "./engine/persistence.js";
 import { buildAgentRecall } from "./engine/eventContext.js";
+import { buildRenderPrompt } from "./schema/visualDNA.js";
 
 const app = express();
 app.use(cors());
@@ -157,6 +158,70 @@ app.get("/api/agents/:id/recall", async (req, res) => {
     .map(e => buildAgentRecall(e, agent))
     .filter(Boolean);
   res.json({ agent: agent.name, recalls: recalls.slice(0, limit) });
+});
+
+// Generate avatar for an agent — uses Fal.ai with the agent's visual DNA
+app.post("/api/agents/:id/generate-avatar", async (req, res) => {
+  const agents = getAgents();
+  const agent = agents.find(a => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+  const imageKey = process.env.IMAGE_API_KEY;
+  if (!imageKey) return res.json({ url: null, message: "Image generation not configured" });
+
+  const prompt = buildRenderPrompt(agent.visual_dna);
+  const fsModule = await import("fs");
+  const fs = fsModule.default || fsModule;
+  const imgDir = path.join(__dirname, "..", "public", "images");
+
+  try {
+    // Submit to Fal.ai
+    const submitRes = await fetch("https://queue.fal.run/fal-ai/fast-sdxl", {
+      method: "POST",
+      headers: { "Authorization": `Key ${imageKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, image_size: "portrait_4_3", num_inference_steps: 25 }),
+    });
+    const submitData = await submitRes.json();
+    if (!submitData.request_id) return res.status(500).json({ error: "Fal.ai submit failed", detail: submitData });
+
+    // Poll for completion
+    let attempts = 0;
+    let status = "IN_QUEUE";
+    while (status === "IN_QUEUE" || status === "IN_PROGRESS") {
+      if (attempts++ > 30) return res.status(504).json({ error: "Image generation timeout" });
+      await new Promise(r => setTimeout(r, 2000));
+      const statusRes = await fetch(`https://queue.fal.run/fal-ai/fast-sdxl/requests/${submitData.request_id}/status`, {
+        headers: { "Authorization": `Key ${imageKey}` },
+      });
+      const statusData = await statusRes.json();
+      status = statusData.status;
+    }
+
+    // Get result
+    const resultRes = await fetch(`https://queue.fal.run/fal-ai/fast-sdxl/requests/${submitData.request_id}`, {
+      headers: { "Authorization": `Key ${imageKey}` },
+    });
+    const resultData = await resultRes.json();
+
+    const imageUrl = resultData.images?.[0]?.url;
+    if (!imageUrl) return res.status(500).json({ error: "No image returned" });
+
+    // Download and save locally
+    const imgRes = await fetch(imageUrl);
+    const imgBuffer = await imgRes.arrayBuffer();
+    const imagesDir = imgDir;
+    if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+    const filename = `avatar-${agent.id}.png`;
+    const filepath = path.join(imagesDir, filename);
+    fs.writeFileSync(filepath, Buffer.from(imgBuffer));
+
+    // Set avatar URL on agent
+    agent.avatar_url = `/images/${filename}`;
+
+    res.json({ url: agent.avatar_url, prompt: prompt.substring(0, 200) + "..." });
+  } catch (err) {
+    res.status(500).json({ error: "Avatar generation failed", detail: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
