@@ -175,7 +175,6 @@ app.post("/api/agents/:id/generate-avatar", async (req, res) => {
   const imgDir = path.join(__dirname, "..", "public", "images");
 
   try {
-    // Submit to Fal.ai
     const submitRes = await fetch("https://queue.fal.run/fal-ai/fast-sdxl", {
       method: "POST",
       headers: { "Authorization": `Key ${imageKey}`, "Content-Type": "application/json" },
@@ -184,7 +183,6 @@ app.post("/api/agents/:id/generate-avatar", async (req, res) => {
     const submitData = await submitRes.json();
     if (!submitData.request_id) return res.status(500).json({ error: "Fal.ai submit failed", detail: submitData });
 
-    // Poll for completion
     let attempts = 0;
     let status = "IN_QUEUE";
     while (status === "IN_QUEUE" || status === "IN_PROGRESS") {
@@ -197,7 +195,6 @@ app.post("/api/agents/:id/generate-avatar", async (req, res) => {
       status = statusData.status;
     }
 
-    // Get result
     const resultRes = await fetch(`https://queue.fal.run/fal-ai/fast-sdxl/requests/${submitData.request_id}`, {
       headers: { "Authorization": `Key ${imageKey}` },
     });
@@ -206,7 +203,6 @@ app.post("/api/agents/:id/generate-avatar", async (req, res) => {
     const imageUrl = resultData.images?.[0]?.url;
     if (!imageUrl) return res.status(500).json({ error: "No image returned" });
 
-    // Download and save locally
     const imgRes = await fetch(imageUrl);
     const imgBuffer = await imgRes.arrayBuffer();
     const imagesDir = imgDir;
@@ -215,12 +211,69 @@ app.post("/api/agents/:id/generate-avatar", async (req, res) => {
     const filepath = path.join(imagesDir, filename);
     fs.writeFileSync(filepath, Buffer.from(imgBuffer));
 
-    // Set avatar URL on agent
     agent.avatar_url = `/images/${filename}`;
 
     res.json({ url: agent.avatar_url, prompt: prompt.substring(0, 200) + "..." });
   } catch (err) {
     res.status(500).json({ error: "Avatar generation failed", detail: err.message });
+  }
+});
+
+// Generate image for a space — uses Fal.ai with the space description
+app.post("/api/spaces/:id/generate-image", async (req, res) => {
+  const world = getWorldState();
+  const space = world.spaces.find(s => s.id === req.params.id);
+  if (!space) return res.status(404).json({ error: "Space not found" });
+
+  const imageKey = process.env.IMAGE_API_KEY;
+  if (!imageKey) return res.json({ url: null, message: "Image generation not configured" });
+
+  const prompt = `anime style, ethereal atmosphere, soft twilight lighting, cel-shaded, warm golden tones with violet shadows, atmospheric, dreamlike. ${space.name}: ${space.description}. Wide landscape view of the space, no people, no text.`;
+
+  const fsModule = await import("fs");
+  const fs = fsModule.default || fsModule;
+  const imgDir = path.join(__dirname, "..", "public", "images");
+
+  try {
+    const submitRes = await fetch("https://queue.fal.run/fal-ai/fast-sdxl", {
+      method: "POST",
+      headers: { "Authorization": `Key ${imageKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, image_size: "landscape_16_9", num_inference_steps: 25 }),
+    });
+    const submitData = await submitRes.json();
+    if (!submitData.request_id) return res.status(500).json({ error: "Fal.ai submit failed", detail: submitData });
+
+    let attempts = 0;
+    let status = "IN_QUEUE";
+    while (status === "IN_QUEUE" || status === "IN_PROGRESS") {
+      if (attempts++ > 30) return res.status(504).json({ error: "Image generation timeout" });
+      await new Promise(r => setTimeout(r, 2000));
+      const statusRes = await fetch(`https://queue.fal.run/fal-ai/fast-sdxl/requests/${submitData.request_id}/status`, {
+        headers: { "Authorization": `Key ${imageKey}` },
+      });
+      const statusData = await statusRes.json();
+      status = statusData.status;
+    }
+
+    const resultRes = await fetch(`https://queue.fal.run/fal-ai/fast-sdxl/requests/${submitData.request_id}`, {
+      headers: { "Authorization": `Key ${imageKey}` },
+    });
+    const resultData = await resultRes.json();
+
+    const imageUrl = resultData.images?.[0]?.url;
+    if (!imageUrl) return res.status(500).json({ error: "No image returned" });
+
+    const imgRes = await fetch(imageUrl);
+    const imgBuffer = await imgRes.arrayBuffer();
+    if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+    const filename = `space-${space.id}.png`;
+    fs.writeFileSync(path.join(imgDir, filename), Buffer.from(imgBuffer));
+
+    space.image_url = `/images/${filename}`;
+
+    res.json({ url: space.image_url, name: space.name });
+  } catch (err) {
+    res.status(500).json({ error: "Space image generation failed", detail: err.message });
   }
 });
 

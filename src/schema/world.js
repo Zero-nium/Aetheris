@@ -20,6 +20,7 @@ export const WORLD_DNA = {
       connections: ["reading_hall", "garden_courtyard", "archives"],
       coordinates: { x: 50, y: 50 },
       size: "large",
+      image_url: "/images/space-grand_atrium.png",
       items: [
         { id: "central_desk", name: "central reading desk", type: "furniture", x: 50, y: 50 },
         { id: "globe", name: "brass globe", type: "object", x: 45, y: 48 },
@@ -32,6 +33,7 @@ export const WORLD_DNA = {
       connections: ["grand_atrium"],
       coordinates: { x: 80, y: 50 },
       size: "medium",
+      image_url: "/images/space-reading_hall.png",
       items: [
         { id: "table_1", name: "oak reading table", type: "furniture", x: 80, y: 50 },
         { id: "lamp_1", name: "amber desk lamp", type: "object", x: 78, y: 48 },
@@ -44,6 +46,7 @@ export const WORLD_DNA = {
       connections: ["grand_atrium"],
       coordinates: { x: 50, y: 80 },
       size: "medium",
+      image_url: "/images/space-garden_courtyard.png",
       items: [
         { id: "fountain", name: "stone fountain", type: "object", x: 50, y: 82 },
         { id: "bench", name: "moss-covered bench", type: "furniture", x: 52, y: 78 },
@@ -56,6 +59,7 @@ export const WORLD_DNA = {
       connections: ["grand_atrium"],
       coordinates: { x: 20, y: 50 },
       size: "medium",
+      image_url: "/images/space-archives.png",
       items: [],
     },
   ],

@@ -235,10 +235,15 @@
         labelG.selectAll('text').attr('x',d=>d.x).attr('y',d=>d.y-22);
       });
       svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', e => g.attr('transform', e.transform)));
+      // Click handler for space nodes
+      nodeG.on('click', (event, d) => {
+        event.stopPropagation();
+        selectSpace(d.id, d.name, d.image_url);
+      });
     }
 
     function updateGraph(data) {
-      const nodes = data.spaces.map(s => ({id:s.id, name:s.name}));
+      const nodes = data.spaces.map(s => ({id:s.id, name:s.name, image_url:s.image_url}));
       const links = [];
       data.spaces.forEach(s => { s.connections.forEach(c => { if(nodes.find(n=>n.id===c)) links.push({source:s.id, target:c}); }); });
       const agents = data.agents.map(a => {
@@ -252,6 +257,22 @@
       simulation.nodes(nodes);
       simulation.force('link').links(links);
       simulation.alpha(0.3).restart();
+    }
+
+    let selectedSpaceEl = null;
+    function selectSpace(id, name, imageUrl) {
+      // Highlight selected node
+      if (selectedSpaceEl) selectedSpaceEl.style.stroke = '';
+      const mapBg = document.getElementById('map');
+      if (imageUrl) {
+        mapBg.style.backgroundImage = `url(${imageUrl})`;
+        mapBg.style.backgroundSize = 'cover';
+        mapBg.style.backgroundPosition = 'center';
+        mapBg.style.backgroundBlendMode = 'multiply';
+      }
+      // Update selected node stroke
+      d3.selectAll('.space-node').style('stroke', function(d) { return d.id === id ? '#ff6b9d' : ''; });
+      selectedSpaceEl = d3.select(`circle[data-id="${id}"]`).node();
     }
 
     function updateEventFeed(events) {
