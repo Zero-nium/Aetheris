@@ -31,6 +31,8 @@ export function enrichEvent(event, agents, worldState, tickCount) {
     space_name: spaceName,
     space_description: spaceDescription,
     present_agents: presentAgents,
+    image_prompt: event.image_prompt || null,
+    image_url: event.image_url || null,
     raw: { ...event },
   };
 
