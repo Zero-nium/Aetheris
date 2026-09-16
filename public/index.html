@@ -31,7 +31,7 @@
     #world-view { flex: 1; }
 
     /* Map panel */
-    #map { width: 340px; border-right: 1px solid #eee; background: #fff; position: relative; flex-shrink: 0; }
+    #map { width: 420px; border-right: 1px solid #eee; background: #fff; position: relative; flex-shrink: 0; }
     #map svg { width: 100%; height: calc(100% - 120px); }
     .space-node { fill: #f0f0f5; stroke: #ddd; stroke-width: 2; }
     .space-node:hover { stroke: #ff6b9d; }
@@ -236,11 +236,6 @@
         labelG.selectAll('text').attr('x',d=>d.x).attr('y',d=>d.y-22);
       });
       svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', e => g.attr('transform', e.transform)));
-      // Click handler for space nodes
-      nodeG.on('click', (event, d) => {
-        event.stopPropagation();
-        selectSpace(d.id, d.name, d.image_url);
-      });
     }
 
     function updateGraph(data) {
@@ -252,7 +247,8 @@
         return {id:a.id, name:a.name, x:n?.x||0, y:n?.y||0};
       });
       linkG.selectAll('line').data(links).join('line').attr('class','link');
-      nodeG.selectAll('circle').data(nodes).join(enter=>enter.append('circle').attr('class','space-node').attr('r',16));
+      const nodeSel = nodeG.selectAll('circle').data(nodes).join(enter=>enter.append('circle').attr('class','space-node').attr('r',16));
+      nodeSel.on('click', (event, d) => { event.stopPropagation(); selectSpace(d.id, d.name, d.image_url); });
       labelG.selectAll('text').data(nodes).join(enter=>enter.append('text').attr('class','space-label').text(d=>d.name), update=>update.text(d=>d.name));
       agentG.selectAll('circle').data(agents).join(enter=>enter.append('circle').attr('class','agent-dot').attr('r',4));
       simulation.nodes(nodes);
@@ -278,9 +274,10 @@
       } catch(e) {}
     }
     function getAvatar(name) {
+      if (!name) return '?';
       const url = avatarMap[name];
       if (url) return `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" alt="${escapeHtml(name)}" />`;
-      return (name || '?').charAt(0).toUpperCase();
+      return name.charAt(0).toUpperCase();
     }
 
     function updateEventFeed(events) {
@@ -477,6 +474,8 @@
     }
 
     initGraph(); loadAvatarMap().then(() => { fetchWorld(); fetchEvents(); fetchResonance(); });
+    // Also reload avatar map periodically
+    setInterval(() => loadAvatarMap(), 30000);
   </script>
 </body>
 </html>
