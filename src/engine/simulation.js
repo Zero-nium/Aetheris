@@ -142,64 +142,117 @@ export function processProximityInteractions(agent, nearbyAgents) {
   const extroversion = dims.extroversion ?? 0.5;
   const events = [];
 
-  for (const other of nearbyAgents) {
-    // Cooldown check
-    if (agent.state.conversation_cooldown > 0) continue;
+  // Group conversation — all nearby agents participate
+  if (nearbyAgents.length === 0) return events;
 
-    // Interaction chance = sociability * extroversion * 0.4 (max ~40% per tick per pair)
-    const interactChance = sociability * extroversion * 0.4;
-    if (Math.random() > interactChance) continue;
+  // Cooldown check for initiator
+  if (agent.state.conversation_cooldown > 0) return events;
 
-    // Determine interaction type based on personality
-    const interactionTypes = [];
-    if (agent.personality === "mischievous") interactionTypes.push("playful_comment", "observation");
-    if (agent.personality === "grumpy") interactionTypes.push("curt_remark", "observation");
-    if (agent.personality === "curious") interactionTypes.push("question", "observation");
-    if (agent.personality === "zen") interactionTypes.push("quiet_acknowledgment");
-    if (agent.personality === "clingy") interactionTypes.push("greeting", "observation");
-    if (agent.personality === "aloof") interactionTypes.push("brief_nod");
-    if (agent.personality === "playful") interactionTypes.push("greeting", "playful_comment");
-    if (agent.personality === "bold") interactionTypes.push("greeting", "question", "playful_comment");
-    if (interactionTypes.length === 0) interactionTypes.push("observation");
+  // Interaction chance
+  const interactChance = sociability * extroversion * 0.4;
+  if (Math.random() > interactChance) return events;
 
-    const interaction = interactionTypes[Math.floor(Math.random() * interactionTypes.length)];
+  // All participants: agent + nearby agents
+  const participants = [agent, ...nearbyAgents];
 
-    // Build relationship
-    if (!agent.cognition.relationships[other.id]) {
-      agent.cognition.relationships[other.id] = { affinity: 0, last_interaction: null };
-    }
-    agent.cognition.relationships[other.id].last_interaction = new Date().toISOString();
-    // Affinity shifts based on interaction type
-    if (["greeting", "question", "quiet_acknowledgment", "brief_nod"].includes(interaction)) {
-      agent.cognition.relationships[other.id].affinity += 0.1;
-    }
-    if (["playful_comment"].includes(interaction)) {
-      agent.cognition.relationships[other.id].affinity += 0.05;
-    }
-
-    agent.cognition.known_agents = [...new Set([...agent.cognition.known_agents, other.id])];
-    agent.state.conversation_cooldown = 2 + Math.floor(Math.random() * 3);
-    agent.stats.conversations_had++;
-
-    // Generate actual dialogue
-    const dialogue = generateDialogue(agent, other, interaction);
-    const targetResponse = generateResponse(other, agent, interaction);
-    const fullConversation = `${dialogue}${targetResponse ? " — " + targetResponse : ""}`;
-
-    events.push({
-      type: "agent_interaction",
-      agent_id: agent.id,
-      agent_name: agent.name,
-      target_id: other.id,
-      target_name: other.name,
-      interaction,
-      interaction_type: interaction,
-      dialogue,
-      response: targetResponse,
-      content: fullConversation,
-      affinity: agent.cognition.relationships[other.id]?.affinity || 0,
-    });
+  // Calculate conversation depth (1-5 exchanges)
+  let depth = 2; // base
+  for (const p of participants) {
+    const pDims = p.dimensions || {};
+    if ((pDims.sociability ?? 0.3) > 0.7) depth++;
+    if ((pDims.extroversion ?? 0.5) > 0.7) depth++;
+    if (p.personality === "grumpy" || p.personality === "aloof") depth--;
+    if (p.personality === "curious" || p.personality === "bold") depth++;
   }
+  // High affinity between agents → longer conversation
+  let totalAffinity = 0;
+  let pairCount = 0;
+  for (let i = 0; i < participants.length; i++) {
+    for (let j = i + 1; j < participants.length; j++) {
+      const rel = participants[i].cognition?.relationships?.[participants[j].id];
+      if (rel) { totalAffinity += rel.affinity; pairCount++; }
+    }
+  }
+  if (pairCount > 0 && totalAffinity / pairCount > 0.5) depth++;
+  depth = Math.max(1, Math.min(5, depth));
+
+  // Determine ending style based on participants
+  const personalities = participants.map(p => p.personality);
+  let endingStyle;
+  if (personalities.includes("grumpy") && personalities.includes("bold")) {
+    endingStyle = "disagreement";
+  } else if (personalities.includes("aloof") || personalities.includes("sleepy")) {
+    endingStyle = "trailing_off";
+  } else if (personalities.includes("grumpy")) {
+    endingStyle = "abrupt_cutoff";
+  } else if (personalities.includes("zen")) {
+    endingStyle = "settled";
+  } else if (personalities.includes("curious") && Math.random() > 0.5) {
+    endingStyle = "topic_shift";
+  } else {
+    endingStyle = "natural";
+  }
+
+  // Interaction type (from initiator's personality)
+  const interactionTypes = [];
+  if (agent.personality === "mischievous") interactionTypes.push("playful_comment", "observation");
+  if (agent.personality === "grumpy") interactionTypes.push("curt_remark", "observation");
+  if (agent.personality === "curious") interactionTypes.push("question", "observation");
+  if (agent.personality === "zen") interactionTypes.push("quiet_acknowledgment");
+  if (agent.personality === "clingy") interactionTypes.push("greeting", "observation");
+  if (agent.personality === "aloof") interactionTypes.push("brief_nod");
+  if (agent.personality === "playful") interactionTypes.push("greeting", "playful_comment");
+  if (agent.personality === "bold") interactionTypes.push("greeting", "question", "playful_comment");
+  if (interactionTypes.length === 0) interactionTypes.push("observation");
+  const interaction = interactionTypes[Math.floor(Math.random() * interactionTypes.length)];
+
+  // Update relationships for all pairs
+  for (let i = 0; i < participants.length; i++) {
+    for (let j = 0; j < participants.length; j++) {
+      if (i === j) continue;
+      if (!participants[i].cognition.relationships[participants[j].id]) {
+        participants[i].cognition.relationships[participants[j].id] = { affinity: 0, last_interaction: null };
+      }
+      participants[i].cognition.relationships[participants[j].id].last_interaction = new Date().toISOString();
+      if (["greeting", "question", "quiet_acknowledgment", "brief_nod"].includes(interaction)) {
+        participants[i].cognition.relationships[participants[j].id].affinity += 0.05;
+      }
+      if (["playful_comment"].includes(interaction)) {
+        participants[i].cognition.relationships[participants[j].id].affinity += 0.03;
+      }
+      participants[i].cognition.known_agents = [...new Set([...participants[i].cognition.known_agents, participants[j].id])];
+    }
+    participants[i].state.conversation_cooldown = 2 + Math.floor(Math.random() * 3);
+    participants[i].stats.conversations_had++;
+  }
+
+  // Build conversation event — participants, depth, ending for LLM enrichment
+  const spaceName = agent.state.space_id?.replace(/_/g, " ") || "the library";
+  const conversationId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  events.push({
+    type: "agent_conversation",
+    conversation_id: conversationId,
+    agent_id: agent.id,
+    agent_name: agent.name,
+    interaction_type: interaction,
+    participants: participants.map(p => ({
+      name: p.name,
+      personality: p.personality,
+      job: p.job,
+      id: p.id,
+    })),
+    depth,
+    ending_style: endingStyle,
+    space_id: agent.state.space_id,
+    space_name: spaceName,
+    content: `${participants.map(p => p.name).join(", ")} started a conversation in ${spaceName}`,
+    dialogue: null, // to be filled by LLM enrichment
+    response: null, // to be filled by LLM enrichment
+    affinity: totalAffinity,
+    dialogue_status: "pending",
+  });
+
   return events;
 }
 

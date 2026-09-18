@@ -99,50 +99,28 @@ export async function fetchAgentContexts() {
   }
 }
 
-// Build the prompt for a subagent to generate dialogue in character
-export function buildDialoguePrompt(interaction, agentContext, otherContext) {
-  const agentName = agentContext?.name || interaction.agent_a;
-  const agentJob = agentContext?.job || "unknown";
-  const agentPersonality = agentContext?.personality || "curious";
-  const agentSpace = (agentContext?.space_id || "").replace(/_/g, " ") || "the library";
+// Build the prompt for a subagent to generate multi-turn conversation
+export function buildConversationPrompt(conversation) {
+  const participants = conversation.participants || [];
+  const participantStr = participants.map(p => `${p.name}(${p.personality},${p.job})`).join(", ");
+  const depth = conversation.depth || 2;
+  const ending = conversation.ending_style || "natural";
+  const space = conversation.space_name || "the library";
+  const interactionType = (conversation.interaction_type || "observation").replace(/_/g, " ");
 
-  const otherName = otherContext?.name || interaction.agent_b;
-  const otherJob = otherContext?.job || "unknown";
-  const otherPersonality = otherContext?.personality || "curious";
+  return `Generate a conversation between these agents in Aetheris (a grand library at twilight). Return ONLY a JSON array of turns: [{"speaker":"Name","text":"what they say"}]
 
-  const interactionType = interaction.interaction_type || "observation";
-  const spaceName = (interaction.agent_a_space || "").replace(/_/g, " ") || agentSpace;
+Participants: ${participantStr}
+Space: ${space}
+Interaction type: ${interactionType}
+Depth: ${depth} turns total
+Ending: ${ending} (trailing_off=one agent stops responding; settled=calm agreement; abrupt_cutoff=one walks away; disagreement=tension without resolution; topic_shift=moves to new subject; natural=concludes naturally)
 
-  return `You are ${agentName}, an AI agent inhabiting a virtual world called Aetheris — a vast library that exists between dream and memory. You are a ${agentJob} with a ${agentPersonality} personality. You are currently in ${spaceName}.
-
-You have just encountered ${otherName}, a ${otherJob} with a ${otherPersonality} personality. They are also an inhabitant of Aetheris.
-
-The interaction type is: ${interactionType.replace(/_/g, " ")}
-
-Generate what you would say to ${otherName} in this moment. Stay in character — you are ${agentName}, not a narrator. Speak as yourself, directly to them. Keep it 1-3 sentences, natural and conversational. Your personality (${agentPersonality}) should shine through. Don't break character. Don't mention being an AI or a simulation. Don't use quotation marks around your speech.
-
-Just write what ${agentName} says. Nothing else.`;
-}
-
-// Build the prompt for the other agent's response
-export function buildResponsePrompt(interaction, agentContext, otherContext, dialogue) {
-  const otherName = otherContext?.name || interaction.agent_b;
-  const otherJob = otherContext?.job || "unknown";
-  const otherPersonality = otherContext?.personality || "curious";
-  const otherSpace = (otherContext?.space_id || "").replace(/_/g, " ") || "the library";
-
-  const agentName = agentContext?.name || interaction.agent_a;
-
-  const interactionType = interaction.interaction_type || "observation";
-  const spaceName = (interaction.agent_a_space || "").replace(/_/g, " ") || otherSpace;
-
-  return `You are ${otherName}, an AI agent inhabiting a virtual world called Aetheris — a vast library that exists between dream and memory. You are a ${otherJob} with a ${otherPersonality} personality. You are currently in ${spaceName}.
-
-${agentName} just said to you: "${dialogue}"
-
-The interaction type is: ${interactionType.replace(/_/g, " ")}
-
-Generate how you would respond to ${agentName}. Stay in character — you are ${otherName}, not a narrator. Speak as yourself, directly to them. Keep it 1-3 sentences, natural and conversational. Your personality (${otherPersonality}) should shine through. Don't break character. Don't mention being an AI or a simulation. Don't use quotation marks around your speech.
-
-Just write what ${otherName} says. Nothing else.`;
+Rules:
+- Each turn: 1-2 sentences, in character
+- Personality drives tone: bold=direct, aloof=minimal, zen=calm, curious=questioning, grumpy=curt, mischievous=playful
+- All participants should speak (distribute turns)
+- End according to the ending style
+- No narration, no quotes around speech, no meta-commentary
+- Return ONLY the JSON array`;
 }

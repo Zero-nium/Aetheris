@@ -86,6 +86,9 @@
     .text-event .type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #bbb; font-weight: 600; }
     .text-event .content { font-size: 14px; color: #555; margin-top: 2px; }
     .text-event .time { font-size: 11px; color: #ccc; margin-top: 4px; }
+    .conv-turn { padding: 4px 0; font-size: 13px; line-height: 1.4; color: #555; }
+    .conv-speaker { font-weight: 600; color: #1a1a2e; }
+    .tag-conversation { color: #ff6b9d; }
 
     /* === CHAT VIEW === */
     #chat-view { flex: 1; }
@@ -309,13 +312,34 @@
       const html = items.map(e => {
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-        // Agent interaction — show avatars
-        if (e.type === 'agent_interaction') {
-          const avA = getAvatar(e.agent_name) || (e.agent_a || '?').charAt(0);
-          const avB = getAvatar(e.target_name || e.agent_b) || '?';
-          const dialogue = e.dialogue ? `<div style="margin:6px 0;font-style:italic;color:#c44d7a">"${escapeHtml(e.dialogue)}"</div>` : '';
-          const response = e.response ? `<div style="font-style:italic;color:#888;margin:4px 0">"${escapeHtml(e.response)}"</div>` : '';
-          return `<div class="feed-card type-${e.type}"><div class="card-body"><div class="card-tag tag-${e.type}">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.agent_name || '?')} → ${escapeHtml(e.target_name || e.agent_b || '?')}</div><div class="card-desc">${dialogue}${response}</div><div class="card-footer"><div class="card-avatars"><div class="mini-avatar">${avA}</div><div class="mini-avatar">${avB}</div></div><div class="card-time">${time}</div></div></div></div>`;
+        // Agent conversation — show multi-turn dialogue
+        if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
+          const names = (e.participants || []).map(p => p.name);
+          const displayNames = names.length > 0 ? names : [e.agent_name, e.target_name].filter(Boolean);
+          const titleStr = displayNames.join(', ');
+          const avatars = displayNames.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
+          let turns = '';
+          if (e.enriched_dialogue) {
+            // Multi-turn enriched conversation
+            try {
+              const parsed = JSON.parse(e.enriched_dialogue);
+              if (Array.isArray(parsed)) {
+                turns = parsed.map(t => `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(t.speaker)}:</span> ${escapeHtml(t.text)}</div>`).join('');
+              } else {
+                turns = `<div class="conv-turn">${escapeHtml(String(e.enriched_dialogue))}</div>`;
+              }
+            } catch {
+              turns = `<div class="conv-turn">${escapeHtml(e.enriched_dialogue)}</div>`;
+            }
+          } else if (e.dialogue) {
+            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(e.agent_name)}:</span> ${escapeHtml(e.dialogue)}</div>`;
+            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(e.target_name || displayNames[1])}:</span> ${escapeHtml(e.response)}</div>`;
+          } else {
+            turns = `<div class="conv-turn" style="color:#bbb;font-style:italic">Conversation pending...</div>`;
+          }
+          const depthLabel = e.depth ? `${e.depth} turns` : '';
+          const endingLabel = e.ending_style ? `· ${e.ending_style.replace(/_/g,' ')}` : '';
+          return `<div class="feed-card type-conversation"><div class="card-body"><div class="card-tag tag-conversation">Conversation</div><div class="card-title">${escapeHtml(titleStr)}</div><div class="card-desc">${turns}</div><div class="card-footer"><div class="card-avatars">${avatars}</div><div class="card-time">${depthLabel} ${endingLabel} ${time}</div></div></div></div>`;
         }
         // World expansion — show image if generating
         if (e.image_prompt) {
