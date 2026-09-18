@@ -16,6 +16,7 @@ import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured 
 import { buildAgentRecall } from "./engine/eventContext.js";
 import { buildRenderPrompt } from "./schema/visualDNA.js";
 import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse } from "./engine/chat.js";
+import { fetchPendingInteractions, updateInteractionDialogue, fetchAgentContexts, buildDialoguePrompt, buildResponsePrompt, isEnrichmentConfigured } from "./engine/enrichment.js";
 
 const app = express();
 app.use(cors());
@@ -160,6 +161,41 @@ app.get("/api/agents/:id/recall", async (req, res) => {
     .map(e => buildAgentRecall(e, agent))
     .filter(Boolean);
   res.json({ agent: agent.name, recalls: recalls.slice(0, limit) });
+});
+
+// --- Dialogue Enrichment ---
+// Returns pending interactions that need LLM dialogue enrichment
+app.get("/api/enrichment/pending", async (_req, res) => {
+  if (!isEnrichmentConfigured()) return res.json({ interactions: [], message: "Enrichment not configured" });
+  const interactions = await fetchPendingInteractions(20);
+  res.json({ interactions, count: interactions.length });
+});
+
+// Enrich a single interaction — generates dialogue using the provided text
+app.post("/api/enrichment/enrich", async (req, res) => {
+  const { interaction_id, dialogue, response } = req.body;
+  if (!interaction_id || !dialogue) return res.status(400).json({ error: "interaction_id and dialogue required" });
+  if (!isEnrichmentConfigured()) return res.json({ message: "Enrichment not configured" });
+  await updateInteractionDialogue(interaction_id, dialogue, response || null);
+  res.json({ success: true, interaction_id });
+});
+
+// Get enriched interactions (for the frontend to display)
+app.get("/api/enrichment/enriched", async (req, res) => {
+  if (!isEnrichmentConfigured()) return res.json({ interactions: [], message: "Enrichment not configured" });
+  const { getDb } = await import("./engine/persistence.js");
+  const db = getDb();
+  if (!db) return res.json({ interactions: [] });
+  try {
+    const { data } = await db.from("aetheris_interactions")
+      .select("*")
+      .eq("dialogue_status", "enriched")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    res.json({ interactions: data || [], count: (data || []).length });
+  } catch (err) {
+    res.json({ interactions: [], error: err.message });
+  }
 });
 
 // --- Chat: User ↔ Agent ---
