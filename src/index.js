@@ -180,6 +180,14 @@ app.post("/api/enrichment/enrich", async (req, res) => {
   res.json({ success: true, interaction_id });
 });
 
+// Batch enrich — single subagent call for all pending interactions
+app.post("/api/enrichment/batch", async (req, res) => {
+  if (!isEnrichmentConfigured()) return res.json({ message: "Enrichment not configured" });
+  const pending = await fetchPendingInteractions(20);
+  if (!pending.length) return res.json({ enriched: 0, message: "No pending interactions" });
+  res.json({ interactions: pending, count: pending.length });
+});
+
 // Get enriched interactions (for the frontend to display)
 app.get("/api/enrichment/enriched", async (req, res) => {
   if (!isEnrichmentConfigured()) return res.json({ interactions: [], message: "Enrichment not configured" });
