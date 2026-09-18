@@ -18,6 +18,24 @@ export function isEnrichmentConfigured() {
   return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+// Fetch enriched interactions
+export async function fetchEnrichedInteractions(limit = 20) {
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const { data, error } = await db.from("aetheris_interactions")
+      .select("*")
+      .eq("dialogue_status", "enriched")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("fetchEnrichedInteractions error:", err.message);
+    return [];
+  }
+}
+
 // Fetch pending interactions that need dialogue enrichment
 export async function fetchPendingInteractions(limit = 10) {
   const db = getDb();

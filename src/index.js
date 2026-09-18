@@ -183,19 +183,9 @@ app.post("/api/enrichment/enrich", async (req, res) => {
 // Get enriched interactions (for the frontend to display)
 app.get("/api/enrichment/enriched", async (req, res) => {
   if (!isEnrichmentConfigured()) return res.json({ interactions: [], message: "Enrichment not configured" });
-  const { getDb } = await import("./engine/persistence.js");
-  const db = getDb();
-  if (!db) return res.json({ interactions: [] });
-  try {
-    const { data } = await db.from("aetheris_interactions")
-      .select("*")
-      .eq("dialogue_status", "enriched")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    res.json({ interactions: data || [], count: (data || []).length });
-  } catch (err) {
-    res.json({ interactions: [], error: err.message });
-  }
+  const { fetchEnrichedInteractions } = await import("./engine/enrichment.js");
+  const interactions = await fetchEnrichedInteractions(20);
+  res.json({ interactions, count: interactions.length });
 });
 
 // --- Chat: User ↔ Agent ---
