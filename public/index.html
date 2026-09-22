@@ -314,26 +314,33 @@
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
         // Agent conversation — show multi-turn dialogue
         if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-          const names = (e.participants || []).map(p => p.name);
-          const displayNames = names.length > 0 ? names : [e.agent_name, e.target_name].filter(Boolean);
-          const titleStr = displayNames.join(', ');
-          const avatars = displayNames.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
+          let names = [];
+          if (e.participants) names = e.participants.map(p => p.name);
+          else if (e.agent_name) names = [e.agent_name, e.target_name].filter(Boolean);
+          // Fallback: parse from content ("X, Y started a conversation...")
+          if (names.length === 0 && e.content) {
+            const m = e.content.match(/^(.+?) started a conversation/);
+            if (m) names = m[1].split(', ').filter(Boolean);
+          }
+          // Fallback: parse from content ("X -> Y")
+          if (names.length === 0 && e.content) {
+            const m = e.content.match(/(\w+)\s*→\s*(\w+)/);
+            if (m) names = [m[1], m[2]];
+          }
+          if (names.length === 0) names = ['?'];
+          const titleStr = names.join(', ');
+          const avatars = names.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
           let turns = '';
           if (e.enriched_dialogue) {
-            // Multi-turn enriched conversation
             try {
               const parsed = JSON.parse(e.enriched_dialogue);
               if (Array.isArray(parsed)) {
                 turns = parsed.map(t => `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(t.speaker)}:</span> ${escapeHtml(t.text)}</div>`).join('');
-              } else {
-                turns = `<div class="conv-turn">${escapeHtml(String(e.enriched_dialogue))}</div>`;
-              }
-            } catch {
-              turns = `<div class="conv-turn">${escapeHtml(e.enriched_dialogue)}</div>`;
-            }
+              } else { turns = `<div class="conv-turn">${escapeHtml(String(e.enriched_dialogue))}</div>`; }
+            } catch { turns = `<div class="conv-turn">${escapeHtml(e.enriched_dialogue)}</div>`; }
           } else if (e.dialogue) {
-            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(e.agent_name)}:</span> ${escapeHtml(e.dialogue)}</div>`;
-            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(e.target_name || displayNames[1])}:</span> ${escapeHtml(e.response)}</div>`;
+            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0])}:</span> ${escapeHtml(e.dialogue)}</div>`;
+            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
           } else {
             turns = `<div class="conv-turn" style="color:#bbb;font-style:italic">Conversation pending...</div>`;
           }
@@ -499,17 +506,22 @@
         // Merge enriched dialogue into conversation events by agent name pair
         for (const e of merged) {
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-            // Get agent pair from event
-            const names = [];
-            if (e.participants) names.push(...e.participants.map(p => p.name));
+            // Get agent pair from event — try multiple sources
+            let names = [];
+            if (e.participants) names = e.participants.map(p => p.name);
             if (e.agent_name) names.push(e.agent_name);
             if (e.target_name) names.push(e.target_name);
             if (e.agent_a) names.push(e.agent_a);
             if (e.agent_b) names.push(e.agent_b);
-            // Try all pairs
+            // Parse from content as fallback
+            if (names.length === 0 && e.content) {
+              const m = e.content.match(/^(.+?) (?:started|→)/);
+              if (m) names = m[1].split(', ').filter(Boolean);
+            }
+            // Try all pairs against enriched map
             for (let i = 0; i < names.length; i++) {
               for (let j = 0; j < names.length; j++) {
-                if (i === j) continue;
+                if (i === j || !names[i] || !names[j]) continue;
                 const key = names[i] + '+' + names[j];
                 if (enrichedMap[key]) {
                   e.enriched_dialogue = enrichedMap[key].dialogue;

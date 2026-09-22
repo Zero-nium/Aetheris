@@ -24,7 +24,7 @@ export async function saveEvents(events, tick) {
     tick,
     type: e.type,
     content: e.content || "",
-    agent_name: e.agent_name || e.agents?.join(", ") || null,
+    agent_name: e.agent_name || e.agent_id || (e.participants && e.participants.length > 0 ? e.participants.map(p => p.name).join(", ") : null) || null,
     space_id: e.space_id || null,
     image_url: e.image_url || null,
     image_prompt: e.image_prompt || null,
