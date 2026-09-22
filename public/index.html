@@ -470,16 +470,48 @@
     }
 
     async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
+    let enrichedMap = {}; // interaction id → {dialogue, response}
+    async function loadEnriched() {
+      try {
+        const d = await (await fetch('/api/enrichment/enriched')).json();
+        enrichedMap = {};
+        for (const i of (d.interactions || [])) {
+          enrichedMap[i.agent_a + ':' + i.agent_b + ':' + i.tick] = {
+            dialogue: i.enriched_dialogue,
+            response: i.enriched_response,
+          };
+        }
+      } catch(e) {}
+    }
+
     async function fetchEvents() {
       try {
         const [liveRes, histRes] = await Promise.all([
           fetch('/api/events?limit=50').then(r=>r.json()).catch(()=>({events:[]})),
           fetch('/api/history/events?limit=100').then(r=>r.json()).catch(()=>({events:[]}))
         ]);
+        await loadEnriched();
         const liveEvents = liveRes.events || [];
         const histEvents = histRes.events || [];
         const histTickSet = new Set(histEvents.map(e => e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)));
         const merged = [...histEvents, ...liveEvents.filter(e => !histTickSet.has(e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)))];
+        // Merge enriched dialogue into conversation events
+        for (const e of merged) {
+          if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
+            // Try to match by agent name + tick
+            for (const [key, val] of Object.entries(enrichedMap)) {
+              const [agentA, agentB, tick] = key.split(':');
+              if ((e.agent_name === agentA || (e.participants && e.participants.some(p => p.name === agentA)))
+                  && parseInt(tick) === e.tick) {
+                e.enriched_dialogue = val.dialogue;
+                e.enriched_response = val.response;
+                e.dialogue = val.dialogue;
+                e.response = val.response;
+                break;
+              }
+            }
+          }
+        }
         merged.sort((a,b) => (a.tick||0) - (b.tick||0));
         updateEventFeed(merged);
         updateWorldFeed(merged);
