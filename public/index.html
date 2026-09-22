@@ -477,17 +477,20 @@
     }
 
     async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
-    let enrichedMap = {}; // agent_a + agent_b → {dialogue, response}
+    let enrichedMap = {}; // agent_a → [{dialogue, response, agent_b}]
     async function loadEnriched() {
       try {
         const d = await (await fetch('/api/enrichment/enriched')).json();
         enrichedMap = {};
         for (const i of (d.interactions || [])) {
-          // Index by both agent name pairs (both directions)
-          const key1 = (i.agent_a || '') + '+' + (i.agent_b || '');
-          const key2 = (i.agent_b || '') + '+' + (i.agent_a || '');
-          enrichedMap[key1] = { dialogue: i.enriched_dialogue, response: i.enriched_response };
-          enrichedMap[key2] = { dialogue: i.enriched_dialogue, response: i.enriched_response };
+          const key = i.agent_a || '';
+          if (!enrichedMap[key]) enrichedMap[key] = [];
+          enrichedMap[key].push({
+            dialogue: i.enriched_dialogue,
+            response: i.enriched_response,
+            agent_b: i.agent_b,
+            tick: i.tick,
+          });
         }
       } catch(e) {}
     }
@@ -503,35 +506,22 @@
         const histEvents = histRes.events || [];
         const histTickSet = new Set(histEvents.map(e => e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)));
         const merged = [...histEvents, ...liveEvents.filter(e => !histTickSet.has(e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)))];
-        // Merge enriched dialogue into conversation events by agent name pair
+        // Merge enriched dialogue into conversation events by initiator name
+        const usedEnriched = new Set();
         for (const e of merged) {
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-            // Get agent pair from event — try multiple sources
-            let names = [];
-            if (e.participants) names = e.participants.map(p => p.name);
-            if (e.agent_name) names.push(e.agent_name);
-            if (e.target_name) names.push(e.target_name);
-            if (e.agent_a) names.push(e.agent_a);
-            if (e.agent_b) names.push(e.agent_b);
-            // Parse from content as fallback
-            if (names.length === 0 && e.content) {
-              const m = e.content.match(/^(.+?) (?:started|→)/);
-              if (m) names = m[1].split(', ').filter(Boolean);
-            }
-            // Try all pairs against enriched map
-            for (let i = 0; i < names.length; i++) {
-              for (let j = 0; j < names.length; j++) {
-                if (i === j || !names[i] || !names[j]) continue;
-                const key = names[i] + '+' + names[j];
-                if (enrichedMap[key]) {
-                  e.enriched_dialogue = enrichedMap[key].dialogue;
-                  e.enriched_response = enrichedMap[key].response;
-                  e.dialogue = enrichedMap[key].dialogue;
-                  e.response = enrichedMap[key].response;
-                  break;
-                }
+            const initiator = e.agent_name || (e.participants && e.participants[0] && e.participants[0].name) || '';
+            const candidates = enrichedMap[initiator] || [];
+            // Find first unused enriched dialogue for this initiator
+            for (let idx = 0; idx < candidates.length; idx++) {
+              if (!usedEnriched.has(initiator + ':' + idx)) {
+                e.enriched_dialogue = candidates[idx].dialogue;
+                e.enriched_response = candidates[idx].response;
+                e.dialogue = candidates[idx].dialogue;
+                e.response = candidates[idx].response;
+                usedEnriched.add(initiator + ':' + idx);
+                break;
               }
-              if (e.dialogue) break;
             }
           }
         }
