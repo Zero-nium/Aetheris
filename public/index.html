@@ -470,16 +470,17 @@
     }
 
     async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
-    let enrichedMap = {}; // interaction id → {dialogue, response}
+    let enrichedMap = {}; // agent_a + agent_b → {dialogue, response}
     async function loadEnriched() {
       try {
         const d = await (await fetch('/api/enrichment/enriched')).json();
         enrichedMap = {};
         for (const i of (d.interactions || [])) {
-          enrichedMap[i.agent_a + ':' + i.agent_b + ':' + i.tick] = {
-            dialogue: i.enriched_dialogue,
-            response: i.enriched_response,
-          };
+          // Index by both agent name pairs (both directions)
+          const key1 = (i.agent_a || '') + '+' + (i.agent_b || '');
+          const key2 = (i.agent_b || '') + '+' + (i.agent_a || '');
+          enrichedMap[key1] = { dialogue: i.enriched_dialogue, response: i.enriched_response };
+          enrichedMap[key2] = { dialogue: i.enriched_dialogue, response: i.enriched_response };
         }
       } catch(e) {}
     }
@@ -495,20 +496,30 @@
         const histEvents = histRes.events || [];
         const histTickSet = new Set(histEvents.map(e => e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)));
         const merged = [...histEvents, ...liveEvents.filter(e => !histTickSet.has(e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)))];
-        // Merge enriched dialogue into conversation events
+        // Merge enriched dialogue into conversation events by agent name pair
         for (const e of merged) {
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-            // Try to match by agent name + tick
-            for (const [key, val] of Object.entries(enrichedMap)) {
-              const [agentA, agentB, tick] = key.split(':');
-              if ((e.agent_name === agentA || (e.participants && e.participants.some(p => p.name === agentA)))
-                  && parseInt(tick) === e.tick) {
-                e.enriched_dialogue = val.dialogue;
-                e.enriched_response = val.response;
-                e.dialogue = val.dialogue;
-                e.response = val.response;
-                break;
+            // Get agent pair from event
+            const names = [];
+            if (e.participants) names.push(...e.participants.map(p => p.name));
+            if (e.agent_name) names.push(e.agent_name);
+            if (e.target_name) names.push(e.target_name);
+            if (e.agent_a) names.push(e.agent_a);
+            if (e.agent_b) names.push(e.agent_b);
+            // Try all pairs
+            for (let i = 0; i < names.length; i++) {
+              for (let j = 0; j < names.length; j++) {
+                if (i === j) continue;
+                const key = names[i] + '+' + names[j];
+                if (enrichedMap[key]) {
+                  e.enriched_dialogue = enrichedMap[key].dialogue;
+                  e.enriched_response = enrichedMap[key].response;
+                  e.dialogue = enrichedMap[key].dialogue;
+                  e.response = enrichedMap[key].response;
+                  break;
+                }
               }
+              if (e.dialogue) break;
             }
           }
         }
