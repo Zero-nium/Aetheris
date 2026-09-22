@@ -27,6 +27,8 @@ export function enrichEvent(event, agents, worldState, tickCount) {
     timestamp,
     type: event.type,
     content: event.content || "",
+    agent_name: event.agent_name || event.agent_id || null,
+    agent_id: event.agent_id || null,
     space_id: spaceId,
     space_name: spaceName,
     space_description: spaceDescription,

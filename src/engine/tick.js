@@ -13,7 +13,7 @@ let lastEventTick = 0;
 
 // Convert raw action to natural English
 function formatAction(action) {
-  const map = {
+    const map = {
     organize_shelves: "organizing shelves",
     guide_visitors: "guiding visitors",
     maintain_order: "maintaining order",
@@ -33,6 +33,30 @@ function formatAction(action) {
     debate: "debating",
     rest: "resting",
     idle: "idle",
+    sit: "sitting quietly",
+    meditate: "meditating",
+    question: "asking a question",
+    greet: "greeting",
+    shelve_books: "shelving books",
+    catalog: "cataloguing",
+    preserve: "preserving",
+    guard_archives: "guarding the archives",
+    repair: "repairing",
+    organize: "organizing",
+    water_plants: "watering the plants",
+    prune: "pruning",
+    sweep: "sweeping",
+    tend_garden: "tending the garden",
+    sketch: "sketching",
+    write: "writing",
+    compose: "composing",
+    hum: "humming",
+    practice: "practicing",
+    listen: "listening",
+    reflect: "reflecting",
+    pace: "pacing",
+    stretch: "stretching",
+    nap: "napping",
   };
   return map[action] || action.replace(/_/g, " ");
 }

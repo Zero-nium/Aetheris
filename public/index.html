@@ -284,7 +284,7 @@
     }
 
     function updateEventFeed(events) {
-      const agentEvents = events.filter(e => e.type === 'agent_action' || e.type === 'agent_move' || e.type === 'agent_interaction').slice(-50);
+      const agentEvents = events.filter(e => e.type === 'agent_action' || e.type === 'agent_move' || e.type === 'agent_interaction' || e.type === 'agent_conversation').slice(-50);
       const html = agentEvents.reverse().map(e => {
         const name = e.agent_name || e.agents?.[0] || '?';
         const ts = e.timestamp || e.created_at;
@@ -307,7 +307,7 @@
     }
 
     function updateWorldFeed(events) {
-      const significant = events.filter(e => e.type === 'world_event' || e.type === 'world_expansion' || e.type === 'agent_interaction' || (e.image_prompt));
+      const significant = events.filter(e => e.type === 'world_event' || e.type === 'world_expansion' || e.type === 'agent_interaction' || e.type === 'agent_conversation' || (e.image_prompt));
       const items = significant.slice(-30).reverse();
       const html = items.map(e => {
         const ts = e.timestamp || e.created_at;
