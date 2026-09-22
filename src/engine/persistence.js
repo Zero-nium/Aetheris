@@ -40,7 +40,7 @@ export async function saveEvents(events, tick) {
 export async function saveInteractions(events, tick) {
   const db = getDb();
   if (!db) return;
-  const interactions = events.filter(e => e.type === "agent_interaction");
+  const interactions = events.filter(e => e.type === "agent_interaction" || e.type === "agent_conversation");
   if (!interactions.length) return;
   const rows = interactions.map(e => ({
     tick,
