@@ -37,7 +37,20 @@ export function enrichEvent(event, agents, worldState, tickCount) {
   };
 
   // Type-specific enrichment
-  if (event.type === "world_expansion") {
+  if (event.type === "agent_conversation") {
+    context.participants = event.participants || [];
+    context.depth = event.depth || 2;
+    context.ending_style = event.ending_style || "natural";
+    context.interaction_type = event.interaction_type;
+    context.dialogue = event.dialogue || null;
+    context.response = event.response || null;
+    context.conversation_id = event.conversation_id;
+    context.summary = `${(event.participants || []).map(p => p.name).join(", ")} had a conversation in ${spaceName}.`;
+    context.what_changed = `A ${event.depth || 2}-turn conversation occurred in ${spaceName}.`;
+    context.why = `Agents in close proximity started talking based on their personalities and recent events.`;
+    context.consequence = `Relationships may have shifted. All participants are aware of each other.`;
+    context.significance = "moderate";
+  } else if (event.type === "world_expansion") {
     context.summary = event.content;
     context.what_changed = event.category
       ? `Resonance in ${event.category} reached its threshold, causing the world to respond.`

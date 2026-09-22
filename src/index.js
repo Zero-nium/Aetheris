@@ -16,7 +16,7 @@ import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured 
 import { buildAgentRecall } from "./engine/eventContext.js";
 import { buildRenderPrompt } from "./schema/visualDNA.js";
 import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse } from "./engine/chat.js";
-import { fetchPendingInteractions, updateInteractionDialogue, fetchAgentContexts, buildDialoguePrompt, buildResponsePrompt, isEnrichmentConfigured } from "./engine/enrichment.js";
+import { fetchPendingInteractions, updateInteractionDialogue, fetchAgentContexts, buildConversationPrompt, isEnrichmentConfigured } from "./engine/enrichment.js";
 
 const app = express();
 app.use(cors());
