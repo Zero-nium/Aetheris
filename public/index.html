@@ -89,6 +89,10 @@
     .conv-turn { padding: 4px 0; font-size: 13px; line-height: 1.4; color: #555; }
     .conv-speaker { font-weight: 600; color: #1a1a2e; }
     .tag-conversation { color: #ff6b9d; }
+    .conv-tile { cursor: pointer; transition: background 0.15s; }
+    .conv-tile:hover { background: #fff0f5; }
+    .conv-label { font-size: 11px; font-weight: 600; color: #ff6b9d; text-transform: uppercase; letter-spacing: 0.5px; }
+    .conv-expanded { padding: 8px 12px 12px 48px; border-bottom: 1px solid #f5f5f5; background: #fafafa; }
 
     /* === CHAT VIEW === */
     #chat-view { flex: 1; }
@@ -220,6 +224,7 @@
     }
 
     function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function toggleConv(id) { const el = document.getElementById('conv-' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
 
     function initGraph() {
       const mapEl = document.getElementById('map');
@@ -284,61 +289,78 @@
     }
 
     function updateEventFeed(events) {
-      const agentEvents = events.filter(e => e.type === 'agent_action' || e.type === 'agent_move' || e.type === 'agent_interaction' || e.type === 'agent_conversation').slice(-50);
+      // Event Feed: agent actions, moves, minor interactions, conversations (collapsed)
+      // Exclude anything that goes to World Feed (world_expansion, world_event, significant conversations)
+      const worldEventTicks = new Set();
+      for (const e of events) {
+        if (e.type === 'world_expansion' || e.type === 'world_event') {
+          for (let t = (e.tick||0) - 5; t <= (e.tick||0) + 5; t++) worldEventTicks.add(t);
+        }
+      }
+      const agentEvents = events.filter(e => {
+        if (e.type === 'agent_action' || e.type === 'agent_move') return true;
+        if (e.type === 'agent_interaction' || e.type === 'agent_conversation') return true;
+        return false;
+      }).slice(-50);
       const html = agentEvents.reverse().map(e => {
-        const name = e.agent_name || e.agents?.[0] || '?';
+        const name = e.agent_name || '?';
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
         const avatar = getAvatar(name);
-        let content;
-        if (e.type === 'agent_interaction') {
-          const target = e.target_name || e.agent_b || '?';
+        // Conversation — collapsible
+        if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
+          let names = [];
+          if (e.participants) names = e.participants.map(p => p.name);
+          else if (e.agent_name) names = [e.agent_name, e.target_name].filter(Boolean);
+          if (names.length === 0 && e.content) { const m = e.content.match(/^(.+?) (?:started|→)/); if (m) names = m[1].split(', '); }
+          if (names.length === 0) names = ['?'];
+          const isSignificant = worldEventTicks.has(e.tick) || (e.significance === 'major' || e.significance === 'moderate');
+          if (isSignificant) return ''; // Skip — goes to World Feed
+          let turns = '';
           if (e.dialogue) {
-            content = `<span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">→ ${escapeHtml(target)}:</span> <em>"${escapeHtml(e.dialogue)}"</em>${e.response ? ` <span class="action-text">↳ ${escapeHtml(target)}:</span> <em>"${escapeHtml(e.response)}"</em>` : ''}`;
-          } else {
-            content = `<span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">→ ${escapeHtml(target)}</span> <span class="action-text">${escapeHtml(e.content || '')}</span>`;
+            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0])}:</span> ${escapeHtml(e.dialogue)}</div>`;
+            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
           }
-          return `<div class="feed-item interaction"><div class="avatar">${avatar}<span class="online-dot"></span></div><div class="content">${content}</div><div class="time">${time}</div></div>`;
+          const convId = (e.conversation_id || e.id || Date.now()).toString().replace(/[^a-zA-Z0-9]/g,'');
+          return `<div class="feed-item conv-tile" onclick="toggleConv('${convId}')"><div class="avatar">${avatar}</div><div class="content"><span class="conv-label">💬 Conversation</span> <span class="agent-name">${escapeHtml(names.join(', '))}</span></div><div class="time">${time}</div></div><div id="conv-${convId}" class="conv-expanded" style="display:none">${turns}</div>`;
         }
-        content = (e.content || '').replace(name + ' ', '');
+        const content = (e.content || '').replace(name + ' ', '');
         return `<div class="feed-item"><div class="avatar">${avatar}</div><div class="content"><span class="agent-name">${escapeHtml(name)}</span> <span class="action-text">${escapeHtml(content)}</span></div><div class="time">${time}</div></div>`;
       }).join('');
       document.getElementById('event-list').innerHTML = html;
     }
 
     function updateWorldFeed(events) {
-      const significant = events.filter(e => e.type === 'world_event' || e.type === 'world_expansion' || e.type === 'agent_interaction' || e.type === 'agent_conversation' || (e.image_prompt));
+      // World Feed: only significant events — world expansions, world events, 
+      // conversations/interactions tied to world state changes
+      const worldEventTicks = new Set();
+      for (const e of events) {
+        if (e.type === 'world_expansion' || e.type === 'world_event') {
+          for (let t = (e.tick||0) - 5; t <= (e.tick||0) + 5; t++) worldEventTicks.add(t);
+        }
+      }
+      const significant = events.filter(e => {
+        if (e.type === 'world_expansion' || e.type === 'world_event') return true;
+        if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
+          return worldEventTicks.has(e.tick) || e.significance === 'major' || e.significance === 'moderate';
+        }
+        return false;
+      });
       const items = significant.slice(-30).reverse();
       const html = items.map(e => {
         const ts = e.timestamp || e.created_at;
         const time = ts ? new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-        // Agent conversation — show multi-turn dialogue
+        // Conversation tied to world event
         if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
           let names = [];
           if (e.participants) names = e.participants.map(p => p.name);
           else if (e.agent_name) names = [e.agent_name, e.target_name].filter(Boolean);
-          // Fallback: parse from content ("X, Y started a conversation...")
-          if (names.length === 0 && e.content) {
-            const m = e.content.match(/^(.+?) started a conversation/);
-            if (m) names = m[1].split(', ').filter(Boolean);
-          }
-          // Fallback: parse from content ("X -> Y")
-          if (names.length === 0 && e.content) {
-            const m = e.content.match(/(\w+)\s*→\s*(\w+)/);
-            if (m) names = [m[1], m[2]];
-          }
+          if (names.length === 0 && e.content) { const m = e.content.match(/^(.+?) (?:started|→)/); if (m) names = m[1].split(', '); }
           if (names.length === 0) names = ['?'];
           const titleStr = names.join(', ');
           const avatars = names.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
           let turns = '';
-          if (e.enriched_dialogue) {
-            try {
-              const parsed = JSON.parse(e.enriched_dialogue);
-              if (Array.isArray(parsed)) {
-                turns = parsed.map(t => `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(t.speaker)}:</span> ${escapeHtml(t.text)}</div>`).join('');
-              } else { turns = `<div class="conv-turn">${escapeHtml(String(e.enriched_dialogue))}</div>`; }
-            } catch { turns = `<div class="conv-turn">${escapeHtml(e.enriched_dialogue)}</div>`; }
-          } else if (e.dialogue) {
+          if (e.dialogue) {
             turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0])}:</span> ${escapeHtml(e.dialogue)}</div>`;
             if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
           } else {
@@ -348,7 +370,7 @@
           const endingLabel = e.ending_style ? `· ${e.ending_style.replace(/_/g,' ')}` : '';
           return `<div class="feed-card type-conversation"><div class="card-body"><div class="card-tag tag-conversation">Conversation</div><div class="card-title">${escapeHtml(titleStr)}</div><div class="card-desc">${turns}</div><div class="card-footer"><div class="card-avatars">${avatars}</div><div class="card-time">${depthLabel} ${endingLabel} ${time}</div></div></div></div>`;
         }
-        // World expansion — show image if generating
+        // World expansion with image
         if (e.image_prompt) {
           const id = btoa(e.image_prompt).slice(0,16).replace(/[^a-zA-Z0-9]/g,'');
           return `<div class="feed-card"><div class="card-body"><div class="card-tag tag-${e.type}">${escapeHtml(e.type.replace(/_/g,' '))}</div><div class="card-title">${escapeHtml(e.content||'')}</div><div class="card-time">${time}</div><div id="wimg-${id}" class="card-time" style="padding:16px;color:#bbb">Generating image...</div></div></div>`;
