@@ -32,7 +32,7 @@
 
     /* Map panel */
     #map { width: 420px; border-right: 1px solid #eee; background: #fff; position: relative; flex-shrink: 0; }
-    #map svg { width: 100%; height: calc(100% - 120px); }
+    #map svg { width: 100%; height: calc(100% - 220px); }
     .space-node { fill: #f0f0f5; stroke: #ddd; stroke-width: 2; }
     .space-node:hover { stroke: #ff6b9d; }
     .space-label { fill: #555; font-size: 10px; text-anchor: middle; pointer-events: none; font-weight: 600; }
@@ -41,7 +41,7 @@
     .agent-label { fill: #ff6b9d; font-size: 8px; text-anchor: middle; pointer-events: none; }
 
     /* Resonance bar */
-    #resonance-bar { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #eee; padding: 10px 14px; max-height: 120px; overflow-y: auto; }
+    #resonance-bar { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #eee; padding: 12px 14px; max-height: 220px; overflow-y: auto; }
     .res-item { margin-bottom: 6px; }
     .res-label { font-size: 11px; color: #888; display: flex; justify-content: space-between; }
     .res-track { height: 4px; background: #f0f0f5; border-radius: 2px; overflow: hidden; margin-top: 3px; }
@@ -322,8 +322,18 @@
           if (isSignificant) return ''; // Skip — goes to World Feed
           let turns = '';
           if (e.dialogue) {
-            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0])}:</span> ${escapeHtml(e.dialogue)}</div>`;
-            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
+            // Check if dialogue is a JSON array (multi-turn) or plain text
+            try {
+              const parsed = JSON.parse(e.dialogue);
+              if (Array.isArray(parsed)) {
+                turns = parsed.map(t => `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(t.speaker || '?')}:</span> ${escapeHtml(t.text || '')}</div>`).join('');
+              } else {
+                turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(String(e.dialogue))}</div>`;
+              }
+            } catch {
+              turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(e.dialogue)}</div>`;
+              if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
+            }
           }
           const convId = (e.conversation_id || e.id || Date.now()).toString().replace(/[^a-zA-Z0-9]/g,'');
           return `<div class="feed-item conv-tile" onclick="toggleConv('${convId}')"><div class="avatar">${avatar}</div><div class="content"><span class="conv-label">💬 Conversation</span> <span class="agent-name">${escapeHtml(names.join(', '))}</span></div><div class="time">${time}</div></div><div id="conv-${convId}" class="conv-expanded" style="display:none">${turns}</div>`;
@@ -366,8 +376,17 @@
           const avatars = names.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
           let turns = '';
           if (e.dialogue) {
-            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(e.dialogue)}</div>`;
-            if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
+            try {
+              const parsed = JSON.parse(e.dialogue);
+              if (Array.isArray(parsed)) {
+                turns = parsed.map(t => `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(t.speaker || '?')}:</span> ${escapeHtml(t.text || '')}</div>`).join('');
+              } else {
+                turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(String(e.dialogue))}</div>`;
+              }
+            } catch {
+              turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(e.dialogue)}</div>`;
+              if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
+            }
           } else {
             turns = `<div class="conv-turn" style="color:#bbb;font-style:italic">Conversation pending...</div>`;
           }
