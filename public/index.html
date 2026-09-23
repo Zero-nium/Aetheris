@@ -318,6 +318,16 @@
             if (m) names = m[1].split(', ');
           }
           if (names.length === 0) names = ['?'];
+          // If dialogue is multi-turn JSON, extract all unique speakers
+          if (e.dialogue) {
+            try {
+              const parsed = JSON.parse(e.dialogue);
+              if (Array.isArray(parsed)) {
+                const speakers = [...new Set(parsed.map(t => t.speaker).filter(Boolean))];
+                if (speakers.length > names.length) names = speakers;
+              }
+            } catch {}
+          }
           const isSignificant = worldEventTicks.has(e.tick) || (e.significance === 'major' || e.significance === 'moderate');
           if (isSignificant) return ''; // Skip — goes to World Feed
           let turns = '';
@@ -372,6 +382,16 @@
           else if (e.agent_name) names = [e.agent_name];
           if (names.length === 0 && e.content) { const m = e.content.match(/^(.+?) (?:started|→)/); if (m) names = m[1].split(', '); }
           if (names.length === 0) names = ['?'];
+          // If dialogue is multi-turn JSON, extract all unique speakers
+          if (e.dialogue) {
+            try {
+              const parsed = JSON.parse(e.dialogue);
+              if (Array.isArray(parsed)) {
+                const speakers = [...new Set(parsed.map(t => t.speaker).filter(Boolean))];
+                if (speakers.length > names.length) names = speakers;
+              }
+            } catch {}
+          }
           const titleStr = names.join(', ');
           const avatars = names.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
           let turns = '';
