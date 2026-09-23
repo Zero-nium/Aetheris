@@ -45,7 +45,7 @@ export async function saveInteractions(events, tick) {
   const rows = interactions.map(e => ({
     tick,
     agent_a: e.agent_name || e.agents?.[0] || null,
-    agent_b: e.target_name || e.agents?.[1] || null,
+    agent_b: e.target_name || e.agents?.[1] || (e.participants && e.participants[1] ? e.participants[1].name : null) || null,
     interaction_type: e.interaction_type || "observation",
     agent_a_space: e.agent_a_space || null,
     agent_b_space: e.agent_b_space || null,
@@ -53,6 +53,10 @@ export async function saveInteractions(events, tick) {
     dialogue: e.dialogue || null,
     response: e.response || null,
     affinity: e.affinity || 0,
+    conversation_id: e.conversation_id || null,
+    participants: e.participants ? JSON.stringify(e.participants) : null,
+    depth: e.depth || null,
+    ending_style: e.ending_style || null,
   }));
   try {
     await db.from("aetheris_interactions").insert(rows);
