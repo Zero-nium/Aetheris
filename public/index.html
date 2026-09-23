@@ -539,13 +539,20 @@
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
             const initiator = e.agent_name || (e.participants && e.participants[0] && e.participants[0].name) || '';
             const candidates = enrichedMap[initiator] || [];
-            // Find first unused enriched dialogue for this initiator
             for (let idx = 0; idx < candidates.length; idx++) {
               if (!usedEnriched.has(initiator + ':' + idx)) {
                 e.enriched_dialogue = candidates[idx].dialogue;
                 e.enriched_response = candidates[idx].response;
                 e.dialogue = candidates[idx].dialogue;
                 e.response = candidates[idx].response;
+                // Set the responder name from enriched data
+                if (candidates[idx].agent_b) {
+                  if (!e.target_name) e.target_name = candidates[idx].agent_b;
+                  // Also add to participants if missing
+                  if (!e.participants || e.participants.length < 2) {
+                    e.participants = [{name: initiator}, {name: candidates[idx].agent_b}];
+                  }
+                }
                 usedEnriched.add(initiator + ':' + idx);
                 break;
               }
