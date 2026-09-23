@@ -9,14 +9,15 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-import { initWorld, getWorldState, getAgents, getEventLog, addAgent } from "./engine/simulation.js";
+import { initWorld, getWorldState, getAgents, getEventLog, addAgent, restoreState } from "./engine/simulation.js";
 import { createAgent, validateAgentDNA } from "./schema/agent.js";
 import { runTick, getTickCount } from "./engine/tick.js";
-import { fetchEvents, fetchInteractions, fetchLatestAgentStates, isDbConfigured } from "./engine/persistence.js";
+import { fetchEvents, fetchInteractions, fetchLatestAgentStates, fetchLatestWorldState, isDbConfigured } from "./engine/persistence.js";
 import { buildAgentRecall } from "./engine/eventContext.js";
 import { buildRenderPrompt } from "./schema/visualDNA.js";
 import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse } from "./engine/chat.js";
 import { fetchPendingInteractions, updateInteractionDialogue, fetchAgentContexts, buildConversationPrompt, isEnrichmentConfigured } from "./engine/enrichment.js";
+import { restoreResonance } from "./engine/causality.js";
 
 const app = express();
 app.use(cors());
@@ -38,6 +39,25 @@ const seedAgents = [
 for (const seed of seedAgents) {
   const agent = createAgent(seed);
   addAgent(agent);
+}
+
+// --- Restore state from Supabase on boot ---
+if (isDbConfigured()) {
+  (async () => {
+    try {
+      const [worldState, agentStates] = await Promise.all([
+        fetchLatestWorldState(),
+        fetchLatestAgentStates(),
+      ]);
+      if (worldState) {
+        await restoreState(worldState, agentStates);
+        if (worldState.resonance) restoreResonance(worldState.resonance);
+        console.log(`State restored: ${worldState.space_count || '?'} spaces, ${agentStates?.length || 0} agents`);
+      }
+    } catch (e) {
+      console.error("State restore error:", e.message);
+    }
+  })();
 }
 
 // --- API Routes ---

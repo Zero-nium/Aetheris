@@ -13,6 +13,16 @@ export const RESONANCE = {
   mystery: { value: 0, threshold: 12, decay: 0.04 },
 };
 
+// Restore resonance from saved state
+export function restoreResonance(savedResonance) {
+  if (!savedResonance) return;
+  for (const [key, val] of Object.entries(savedResonance)) {
+    if (RESONANCE[key] && val) {
+      RESONANCE[key].value = parseFloat(val.value || 0);
+    }
+  }
+}
+
 // Which actions accumulate which resonance
 export const ACTION_RESONANCE = {
   explore: ["exploration"],

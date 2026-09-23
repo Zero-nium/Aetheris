@@ -15,6 +15,31 @@ export function initWorld() {
   return { worldState, agents, eventLog };
 }
 
+// Restore state from Supabase (call after initWorld)
+export async function restoreState(worldStateData, agentStates) {
+  if (worldStateData) {
+    // Restore spaces from saved world state
+    if (worldStateData.spaces) {
+      worldState.spaces = worldStateData.spaces;
+    }
+    // Resonance will be restored separately via the causality module
+  }
+  if (agentStates && agentStates.length > 0) {
+    // Don't override seed agents — just update their positions/moods
+    for (const saved of agentStates) {
+      const agent = agents.find(a => a.id === saved.agent_id);
+      if (agent) {
+        if (saved.space_id) agent.state.space_id = saved.space_id;
+        if (saved.action) agent.state.action = saved.action;
+        if (saved.mood) agent.state.mood = saved.mood;
+        if (saved.known_agents) agent.cognition.known_agents = saved.known_agents;
+        if (saved.discovered_spaces) agent.cognition.discovered_spaces = saved.discovered_spaces;
+        if (saved.conversations_had) agent.stats.conversations_had = saved.conversations_had;
+      }
+    }
+  }
+}
+
 export function getWorldState() { return worldState; }
 export function getAgents() { return agents; }
 export function getEventLog() { return eventLog; }
