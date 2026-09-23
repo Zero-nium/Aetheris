@@ -543,21 +543,38 @@
     }
 
     async function fetchWorld() { try { const d = await (await fetch('/api/world')).json(); updateGraph(d); } catch(e){} }
-    let enrichedMap = {}; // conversation_id → {dialogue, response, agent_a, agent_b}
+    let enrichedMap = {}; // conversation_id OR agent_a+agent_b → {dialogue, response}
+    let enrichedByPair = {}; // agent_a+agent_b → [{dialogue, response}]
     async function loadEnriched() {
       try {
         const d = await (await fetch('/api/enrichment/enriched')).json();
         enrichedMap = {};
+        enrichedByPair = {};
         for (const i of (d.interactions || [])) {
-          // Index by conversation_id if available, otherwise by agent_a+agent_b+tick
-          const key = i.conversation_id || (i.agent_a + '+' + i.agent_b + '+' + i.tick);
-          enrichedMap[key] = {
-            dialogue: i.enriched_dialogue,
-            response: i.enriched_response,
-            agent_a: i.agent_a,
-            agent_b: i.agent_b,
-            tick: i.tick,
-          };
+          // Index by conversation_id if available
+          if (i.conversation_id) {
+            enrichedMap[i.conversation_id] = {
+              dialogue: i.enriched_dialogue,
+              response: i.enriched_response,
+              agent_a: i.agent_a,
+              agent_b: i.agent_b,
+              tick: i.tick,
+            };
+          }
+          // Also index by agent pair for fallback matching
+          const pairKey = (i.agent_a || '') + '+' + (i.agent_b || '');
+          if (!enrichedByPair[pairKey]) enrichedByPair[pairKey] = [];
+          // Only add if it has multi-turn JSON dialogue (skip old single-line ones)
+          if (i.enriched_dialogue && i.enriched_dialogue.startsWith('[{')) {
+            enrichedByPair[pairKey].push({
+              dialogue: i.enriched_dialogue,
+              response: i.enriched_response,
+              agent_a: i.agent_a,
+              agent_b: i.agent_b,
+              tick: i.tick,
+              used: false,
+            });
+          }
         }
       } catch(e) {}
     }
@@ -576,18 +593,27 @@
         // Merge enriched dialogue into conversation events
         for (const e of merged) {
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-            // Try matching by conversation_id first
+            // 1. Try conversation_id match
             let enriched = e.conversation_id ? enrichedMap[e.conversation_id] : null;
-            // Fallback: match by agent pair + tick
+            // 2. Try agent pair match from initiator + each participant
             if (!enriched) {
-              const agentA = e.agent_name || (e.participants && e.participants[0] && e.participants[0].name) || '';
-              const agentB = e.target_name || (e.participants && e.participants[1] && e.participants[1].name) || '';
-              const pairKey = agentA + '+' + agentB + '+' + e.tick;
-              enriched = enrichedMap[pairKey];
-              // Also try reverse pair
+              const initiator = e.agent_name || (e.participants && e.participants[0] && e.participants[0].name) || '';
+              if (e.participants) {
+                for (const p of e.participants) {
+                  if (p.name === initiator) continue;
+                  const pairKey = initiator + '+' + p.name;
+                  const candidates = enrichedByPair[pairKey] || [];
+                  const unused = candidates.find(c => !c.used);
+                  if (unused) { enriched = unused; unused.used = true; break; }
+                }
+              }
               if (!enriched) {
-                const reverseKey = agentB + '+' + agentA + '+' + e.tick;
-                enriched = enrichedMap[reverseKey];
+                for (const [key, candidates] of Object.entries(enrichedByPair)) {
+                  if (key.startsWith(initiator + '+')) {
+                    const unused = candidates.find(c => !c.used);
+                    if (unused) { enriched = unused; unused.used = true; break; }
+                  }
+                }
               }
             }
             if (enriched) {
