@@ -573,12 +573,23 @@
         const histEvents = histRes.events || [];
         const histTickSet = new Set(histEvents.map(e => e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)));
         const merged = [...histEvents, ...liveEvents.filter(e => !histTickSet.has(e.tick + ':' + e.type + ':' + (e.content||'').slice(0,20)))];
-        // Merge enriched dialogue into conversation events by conversation_id
+        // Merge enriched dialogue into conversation events
         for (const e of merged) {
           if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
-            // Match by conversation_id first, then by agent pair + tick
-            const convKey = e.conversation_id || (e.agent_name + '+' + (e.target_name || '') + '+' + e.tick);
-            const enriched = enrichedMap[convKey];
+            // Try matching by conversation_id first
+            let enriched = e.conversation_id ? enrichedMap[e.conversation_id] : null;
+            // Fallback: match by agent pair + tick
+            if (!enriched) {
+              const agentA = e.agent_name || (e.participants && e.participants[0] && e.participants[0].name) || '';
+              const agentB = e.target_name || (e.participants && e.participants[1] && e.participants[1].name) || '';
+              const pairKey = agentA + '+' + agentB + '+' + e.tick;
+              enriched = enrichedMap[pairKey];
+              // Also try reverse pair
+              if (!enriched) {
+                const reverseKey = agentB + '+' + agentA + '+' + e.tick;
+                enriched = enrichedMap[reverseKey];
+              }
+            }
             if (enriched) {
               e.enriched_dialogue = enriched.dialogue;
               e.enriched_response = enriched.response;
