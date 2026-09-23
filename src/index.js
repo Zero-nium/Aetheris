@@ -30,6 +30,10 @@ const seedAgents = [
   { id: "agent-poly", name: "Poly", job: "librarian", personality: "zen", behavior_traits: ["sleepy", "watchful", "zen", "clingy", "curious"], starting_space: "grand_atrium", avatar_url: "/images/avatar-agent-poly.png" },
   { id: "agent-gene", name: "Gene", job: "cartographer", personality: "curious", behavior_traits: ["curious", "adventurous", "watchful", "playful", "mischievous"], starting_space: "archives", avatar_url: "/images/avatar-agent-gene.png" },
   { id: "agent-esis", name: "Esis", job: "gardener", personality: "aloof", behavior_traits: ["sleepy", "aloof", "curious", "zen", "clingy"], starting_space: "garden_courtyard", avatar_url: "/images/avatar-agent-esis.png" },
+  { id: "agent-iris", name: "Iris", job: "philosopher", personality: "mischievous", behavior_traits: ["mischievous", "curious", "playful", "clingy", "adventurous"], starting_space: "grand_atrium", avatar_url: "/images/avatar-agent-iris.png" },
+  { id: "agent-vex", name: "Vex", job: "wanderer", personality: "grumpy", behavior_traits: ["watchful", "reserved", "grumpy", "aloof", "shy"], starting_space: "garden_courtyard", avatar_url: "/images/avatar-agent-vex.png" },
+  { id: "agent-lumen", name: "Lumen", job: "scholar", personality: "curious", behavior_traits: ["curious", "playful", "clingy", "energetic", "adventurous"], starting_space: "archives", avatar_url: "/images/avatar-agent-lumen.png" },
+  { id: "agent-echo", name: "Echo", job: "bard", personality: "bold", behavior_traits: ["energetic", "active", "mischievous", "playful", "adventurous"], starting_space: "reading_hall", avatar_url: "/images/avatar-agent-echo.png" },
 ];
 for (const seed of seedAgents) {
   const agent = createAgent(seed);

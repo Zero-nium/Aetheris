@@ -310,9 +310,13 @@
         // Conversation — collapsible
         if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
           let names = [];
-          if (e.participants) names = e.participants.map(p => p.name);
-          else if (e.agent_name) names = [e.agent_name, e.target_name].filter(Boolean);
-          if (names.length === 0 && e.content) { const m = e.content.match(/^(.+?) (?:started|→)/); if (m) names = m[1].split(', '); }
+          if (e.participants && e.participants.length > 0) names = e.participants.map(p => p.name);
+          else if (e.agent_name && e.target_name) names = [e.agent_name, e.target_name];
+          else if (e.agent_name) names = [e.agent_name];
+          if (names.length === 0 && e.content) {
+            const m = e.content.match(/^(.+?) (?:started|→)/);
+            if (m) names = m[1].split(', ');
+          }
           if (names.length === 0) names = ['?'];
           const isSignificant = worldEventTicks.has(e.tick) || (e.significance === 'major' || e.significance === 'moderate');
           if (isSignificant) return ''; // Skip — goes to World Feed
@@ -353,15 +357,16 @@
         // Conversation tied to world event
         if (e.type === 'agent_conversation' || e.type === 'agent_interaction') {
           let names = [];
-          if (e.participants) names = e.participants.map(p => p.name);
-          else if (e.agent_name) names = [e.agent_name, e.target_name].filter(Boolean);
+          if (e.participants && e.participants.length > 0) names = e.participants.map(p => p.name);
+          else if (e.agent_name && e.target_name) names = [e.agent_name, e.target_name];
+          else if (e.agent_name) names = [e.agent_name];
           if (names.length === 0 && e.content) { const m = e.content.match(/^(.+?) (?:started|→)/); if (m) names = m[1].split(', '); }
           if (names.length === 0) names = ['?'];
           const titleStr = names.join(', ');
           const avatars = names.map(n => `<div class="mini-avatar">${getAvatar(n)}</div>`).join('');
           let turns = '';
           if (e.dialogue) {
-            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0])}:</span> ${escapeHtml(e.dialogue)}</div>`;
+            turns = `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[0] || '?')}:</span> ${escapeHtml(e.dialogue)}</div>`;
             if (e.response) turns += `<div class="conv-turn"><span class="conv-speaker">${escapeHtml(names[1] || '?')}:</span> ${escapeHtml(e.response)}</div>`;
           } else {
             turns = `<div class="conv-turn" style="color:#bbb;font-style:italic">Conversation pending...</div>`;
