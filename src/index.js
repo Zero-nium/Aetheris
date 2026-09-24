@@ -15,7 +15,7 @@ import { runTick, getTickCount } from "./engine/tick.js";
 import { fetchEvents, fetchInteractions, fetchLatestAgentStates, fetchLatestWorldState, isDbConfigured } from "./engine/persistence.js";
 import { buildAgentRecall } from "./engine/eventContext.js";
 import { buildRenderPrompt } from "./schema/visualDNA.js";
-import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse } from "./engine/chat.js";
+import { saveMessage, fetchMessages, sanitizeInput, isChatConfigured, generateSessionId, generateResponse, generateLLMResponse } from "./engine/chat.js";
 import { fetchPendingInteractions, updateInteractionDialogue, fetchAgentContexts, buildConversationPrompt, isEnrichmentConfigured } from "./engine/enrichment.js";
 import { restoreResonance } from "./engine/causality.js";
 
@@ -256,8 +256,11 @@ app.post("/api/agents/:id/chat", rateLimited, async (req, res) => {
   // Fetch recent messages for context (last 10)
   const recentMessages = isChatConfigured() ? await fetchMessages(agent.id, userId, 10) : [];
 
-  // Generate response
-  const response = generateResponse(agent, userMessage, recentMessages, agents, world);
+  // Fetch recent world events for context
+  const recentEvents = isDbConfigured() ? await fetchEvents(20) : getEventLog().slice(-20);
+
+  // Generate response (LLM if configured, deterministic fallback)
+  const response = await generateLLMResponse(agent, userMessage, recentMessages, agents, world, recentEvents);
 
   // Save agent response
   await saveMessage(agent.id, agent.name, userId, sessionId, "agent", response, tick);

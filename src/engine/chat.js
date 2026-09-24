@@ -231,7 +231,80 @@ function detectIntent(message) {
   return "default";
 }
 
-// Generate a deterministic response (zero LLM)
+// Generate a response — uses LLM if configured, falls back to deterministic
+export async function generateLLMResponse(agent, userMessage, recentMessages, agents, worldState, recentEvents) {
+  const apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY;
+  const apiUrl = process.env.LLM_API_URL || "https://openrouter.ai/api/v1/chat/completions";
+  const model = process.env.LLM_MODEL || "z-ai/glm-5.2";
+  
+  if (!apiKey) {
+    // Fallback to deterministic
+    return generateResponse(agent, userMessage, recentMessages, agents, worldState);
+  }
+  
+  // Build context from agent DNA, world state, and recent events
+  const spaceName = (agent.state?.space_id || "").replace(/_/g, " ") || "the library";
+  const personality = agent.personality || "curious";
+  const job = agent.job || "wanderer";
+  
+  // Recent world events (last 3)
+  const recentWorldEvents = (recentEvents || [])
+    .filter(e => e.type === "world_event" || e.type === "world_expansion")
+    .slice(-3)
+    .map(e => e.content || e.summary || "")
+    .join(" ");
+  
+  // Recent agent conversations (last 2)
+  const recentConvos = (recentEvents || [])
+    .filter(e => e.type === "agent_conversation" || e.type === "agent_interaction")
+    .slice(-2)
+    .map(e => e.content || "")
+    .join(" ");
+  
+  // Chat history (last 6 messages)
+  const history = (recentMessages || []).slice(-6).map(m => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.content,
+  }));
+  
+  const systemPrompt = `You are ${agent.name}, an AI agent inhabiting Aetheris — a vast library that exists between dream and memory. You are a ${job} with a ${personality} personality. You are currently in ${spaceName}.
+
+Recent world events: ${recentWorldEvents || "Nothing notable has happened recently."}
+Recent conversations between agents: ${recentConvos || "No recent conversations."}
+
+Stay in character. You are ${agent.name}, not a narrator. Speak directly to the user. Be conversational, 1-3 sentences. Don't mention being an AI. Reference your experiences in the world naturally. If asked about events, draw from what you've witnessed. Be ${personality} — that's your personality.`;
+
+  const body = JSON.stringify({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...history,
+      { role: "user", content: userMessage },
+    ],
+    max_tokens: 200,
+    temperature: 0.7,
+  });
+  
+  try {
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body,
+    });
+    const data = await res.json();
+    const response = data.choices?.[0]?.message?.content;
+    if (response) return response.trim().slice(0, 500);
+    return generateResponse(agent, userMessage, recentMessages, agents, worldState);
+  } catch (err) {
+    console.error("LLM response error:", err.message);
+    return generateResponse(agent, userMessage, recentMessages, agents, worldState);
+  }
+}
+
+// Generate a deterministic response (zero LLM) — fallback
 export function generateResponse(agent, userMessage, recentMessages, agents, worldState) {
   const personality = agent.personality || "curious";
   const templates = RESPONSE_TEMPLATES[personality] || RESPONSE_TEMPLATES.curious;
