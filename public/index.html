@@ -106,8 +106,9 @@
     .friend-item .name { font-size: 15px; font-weight: 500; color: #1a1a2e; }
     .friend-item .status { font-size: 12px; color: #aaa; }
 
-    #chat-profile { width: 240px; border-right: 1px solid #eee; background: #fff; display: flex; flex-direction: column; align-items: center; padding: 32px 20px; }
-    #chat-profile .big-avatar { width: 140px; height: 140px; border-radius: 50%; background: #f5f0eb; border: 3px solid #ffd6e0; display: flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 16px; }
+    #chat-profile { width: 220px; border-right: 1px solid #eee; background: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    #chat-profile .portrait-img { width: 180px; height: 240px; border-radius: 12px; object-fit: cover; border: 2px solid #ffd6e0; margin-bottom: 16px; background: #f5f0eb; }
+    #chat-profile .portrait-placeholder { width: 180px; height: 240px; border-radius: 12px; background: linear-gradient(135deg, #f5f0eb, #e8e0d8); display: flex; align-items: center; justify-content: center; font-size: 3rem; color: #ccc; margin-bottom: 16px; border: 2px solid #ffd6e0; }
     #chat-profile .name { font-size: 26px; font-weight: 700; color: #1a1a2e; }
     #chat-profile .status { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #888; margin-top: 4px; }
     #chat-profile .info { font-size: 13px; color: #aaa; margin-top: 12px; text-align: center; }
@@ -196,7 +197,7 @@
         <div id="friend-list"></div>
       </div>
       <div id="chat-profile">
-        <div class="big-avatar" id="profile-avatar">🐱</div>
+        <div id="profile-portrait" class="portrait-placeholder">🐱</div>
         <div class="name" id="profile-name">Poly</div>
         <div class="status"><span class="live-dot"></span> online</div>
         <div class="info" id="profile-info">Librarian · Zen</div>
@@ -286,6 +287,12 @@
       const url = avatarMap[name];
       if (url) return `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" alt="${escapeHtml(name)}" />`;
       return name.charAt(0).toUpperCase();
+    }
+    function getPortrait(name) {
+      if (!name) return null;
+      const url = avatarMap[name];
+      if (url) return `<img src="${url}" style="width:100%;height:100%;border-radius:10px;object-fit:cover" alt="${escapeHtml(name)}" />`;
+      return null;
     }
 
     function updateEventFeed(events) {
@@ -468,7 +475,15 @@
       fetch('/api/agents/'+id).then(r=>r.json()).then(d => {
         const a = d.agent; activeAgent = a;
         const avatar = getAvatar(a.name);
-        document.getElementById('profile-avatar').innerHTML = avatar;
+        const portraitUrl = a.avatar_url;
+        const portraitEl = document.getElementById('profile-portrait');
+        if (portraitUrl) {
+          portraitEl.className = 'portrait-img';
+          portraitEl.innerHTML = `<img src="${portraitUrl}" style="width:100%;height:100%;border-radius:10px;object-fit:cover" alt="${escapeHtml(a.name)}" />`;
+        } else {
+          portraitEl.className = 'portrait-placeholder';
+          portraitEl.textContent = a.name[0].toUpperCase();
+        }
         document.getElementById('profile-name').textContent = a.name;
         document.getElementById('profile-info').textContent = `${a.job} · ${a.personality}`;
         document.getElementById('chat-text').placeholder = `Message ${a.name}...`;
